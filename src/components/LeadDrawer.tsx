@@ -3,6 +3,12 @@ import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useUpdateLead } from '../hooks/useLeads'
 import WhatsAppButton from './WhatsAppButton'
 
+function addDays(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function LeadDrawer({
   lead,
   onClose,
@@ -16,7 +22,13 @@ export default function LeadDrawer({
   const [status, setStatus] = useState<LeadStatus>(lead.status)
   const [rating, setRating] = useState<LeadRating | null>(lead.rating)
   const [isSpam, setIsSpam] = useState(lead.is_spam)
-  const [baseline, setBaseline] = useState({ status: lead.status, rating: lead.rating, is_spam: lead.is_spam })
+  const [nextContactAt, setNextContactAt] = useState<string | null>(lead.next_contact_at?.slice(0, 10) ?? null)
+  const [baseline, setBaseline] = useState({
+    status: lead.status,
+    rating: lead.rating,
+    is_spam: lead.is_spam,
+    next_contact_at: lead.next_contact_at?.slice(0, 10) ?? null,
+  })
   const [justSaved, setJustSaved] = useState(false)
 
   // El prop `lead` es una foto fija tomada al abrir el drawer (no se actualiza solo),
@@ -25,15 +37,25 @@ export default function LeadDrawer({
     setStatus(lead.status)
     setRating(lead.rating)
     setIsSpam(lead.is_spam)
-    setBaseline({ status: lead.status, rating: lead.rating, is_spam: lead.is_spam })
+    setNextContactAt(lead.next_contact_at?.slice(0, 10) ?? null)
+    setBaseline({
+      status: lead.status,
+      rating: lead.rating,
+      is_spam: lead.is_spam,
+      next_contact_at: lead.next_contact_at?.slice(0, 10) ?? null,
+    })
     setJustSaved(false)
   }, [lead.id])
 
-  const dirty = status !== baseline.status || rating !== baseline.rating || isSpam !== baseline.is_spam
+  const dirty =
+    status !== baseline.status ||
+    rating !== baseline.rating ||
+    isSpam !== baseline.is_spam ||
+    nextContactAt !== baseline.next_contact_at
 
   async function handleSave() {
-    await updateLead.mutateAsync({ id: lead.id, changes: { status, rating, is_spam: isSpam } })
-    setBaseline({ status, rating, is_spam: isSpam })
+    await updateLead.mutateAsync({ id: lead.id, changes: { status, rating, is_spam: isSpam, next_contact_at: nextContactAt } })
+    setBaseline({ status, rating, is_spam: isSpam, next_contact_at: nextContactAt })
     setJustSaved(true)
   }
 
@@ -104,6 +126,55 @@ export default function LeadDrawer({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-slate-500">Próximo contacto</label>
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            <button
+              type="button"
+              onClick={() => setNextContactAt(addDays(0))}
+              className="rounded-md border border-brand-line px-2 py-1 text-xs hover:bg-brand-cream"
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => setNextContactAt(addDays(1))}
+              className="rounded-md border border-brand-line px-2 py-1 text-xs hover:bg-brand-cream"
+            >
+              Mañana
+            </button>
+            <button
+              type="button"
+              onClick={() => setNextContactAt(addDays(3))}
+              className="rounded-md border border-brand-line px-2 py-1 text-xs hover:bg-brand-cream"
+            >
+              +3 días
+            </button>
+            <button
+              type="button"
+              onClick={() => setNextContactAt(addDays(7))}
+              className="rounded-md border border-brand-line px-2 py-1 text-xs hover:bg-brand-cream"
+            >
+              +7 días
+            </button>
+            {nextContactAt && (
+              <button
+                type="button"
+                onClick={() => setNextContactAt(null)}
+                className="rounded-md border border-brand-line px-2 py-1 text-xs text-red-500 hover:bg-red-50"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          <input
+            type="date"
+            value={nextContactAt ?? ''}
+            onChange={(e) => setNextContactAt(e.target.value || null)}
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
+          />
         </div>
 
         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">

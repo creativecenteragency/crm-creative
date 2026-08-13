@@ -1,8 +1,17 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLeads } from '../hooks/useLeads'
 import type { Workspace } from '../types/database'
 import BrandMark from './BrandMark'
+
+function dueFollowUpsCount(leads: ReturnType<typeof useLeads>['data']): number {
+  if (!leads) return 0
+  const today = new Date().toISOString().slice(0, 10)
+  return leads.filter(
+    (l) => l.next_contact_at && l.next_contact_at.slice(0, 10) <= today && l.status !== 'ganado' && l.status !== 'perdido' && !l.is_spam
+  ).length
+}
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return `block rounded-md border-l-2 px-2.5 py-1.5 text-sm transition-colors ${
@@ -37,6 +46,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { workspaceId } = useParams()
   const navigate = useNavigate()
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId)
+  const { data: leads } = useLeads(currentWorkspace?.id)
+  const dueCount = dueFollowUpsCount(leads)
 
   return (
     <div className="min-h-screen flex bg-brand-cream">
@@ -75,6 +86,16 @@ export default function Layout({ children }: { children: ReactNode }) {
               </NavLink>
               <NavLink to={`/w/${currentWorkspace.id}/kanban`} className={navLinkClass}>
                 Kanban
+              </NavLink>
+              <NavLink to={`/w/${currentWorkspace.id}/followups`} className={navLinkClass}>
+                <span className="inline-flex items-center gap-1.5">
+                  Seguimientos
+                  {dueCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-brand-orange text-brand-carbon text-xs font-semibold px-1">
+                      {dueCount}
+                    </span>
+                  )}
+                </span>
               </NavLink>
               <NavLink to={`/w/${currentWorkspace.id}/metrics`} className={navLinkClass}>
                 Métricas

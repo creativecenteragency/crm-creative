@@ -60,6 +60,7 @@ export type Lead = {
   status: LeadStatus
   rating: LeadRating | null
   is_spam: boolean
+  next_contact_at: string | null
 }
 
 // `Relationships: []` es una simplificación deliberada — no describimos las FKs al tipo,

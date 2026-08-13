@@ -26,7 +26,7 @@ export function useUpdateLead(workspaceId: string | undefined) {
       changes,
     }: {
       id: string
-      changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>
+      changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam' | 'next_contact_at'>>
     }) => {
       const { error } = await supabase.from('leads').update(changes).eq('id', id)
       if (error) throw error
