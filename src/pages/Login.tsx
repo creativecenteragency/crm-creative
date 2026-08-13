@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { session, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -16,6 +17,8 @@ export default function Login() {
     if (error) setError(error)
     setSubmitting(false)
   }
+
+  if (session) return <Navigate to="/" replace />
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
