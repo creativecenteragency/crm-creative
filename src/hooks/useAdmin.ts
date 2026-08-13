@@ -109,21 +109,15 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
   })
 }
 
-export function useAddMemberByEmail(workspaceId: string) {
+export function useInviteMember(workspaceId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (email: string) => {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('email', email.trim())
-        .maybeSingle()
-      if (profileError) throw profileError
-      if (!profile) {
-        throw new Error('No existe ningún usuario registrado con ese email. Creálo primero desde el dashboard de Supabase (Authentication → Users → Invite).')
-      }
-      const { error } = await supabase.from('workspace_members').insert({ workspace_id: workspaceId, user_id: profile.id })
+      const { data, error } = await supabase.functions.invoke<{ ok: boolean; invited: boolean }>('invite-user', {
+        body: { email: email.trim(), workspace_id: workspaceId },
+      })
       if (error) throw error
+      return data
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'workspace-members', workspaceId] }),
   })

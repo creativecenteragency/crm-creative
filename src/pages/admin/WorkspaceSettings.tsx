@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import {
-  useAddMemberByEmail,
+  useInviteMember,
   useRemoveMember,
   useUpdateWorkspace,
   useUpsertWorkspaceField,
@@ -26,7 +26,7 @@ export default function WorkspaceSettings() {
   const { data: fields } = useWorkspaceFields(workspaceId)
   const upsertField = useUpsertWorkspaceField(workspaceId!)
   const { data: members } = useWorkspaceMembers(workspaceId)
-  const addMember = useAddMemberByEmail(workspaceId!)
+  const inviteMember = useInviteMember(workspaceId!)
   const removeMember = useRemoveMember(workspaceId!)
 
   const [name, setName] = useState('')
@@ -37,6 +37,7 @@ export default function WorkspaceSettings() {
   const [inquiryOptions, setInquiryOptions] = useState('')
   const [memberEmail, setMemberEmail] = useState('')
   const [memberError, setMemberError] = useState<string | null>(null)
+  const [memberSuccess, setMemberSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     if (workspace) {
@@ -96,8 +97,14 @@ export default function WorkspaceSettings() {
 
   async function handleAddMember() {
     setMemberError(null)
+    setMemberSuccess(null)
     try {
-      await addMember.mutateAsync(memberEmail)
+      const result = await inviteMember.mutateAsync(memberEmail)
+      setMemberSuccess(
+        result?.invited
+          ? 'Invitación enviada por email. El usuario va a poder configurar su contraseña desde ahí.'
+          : 'Usuario existente asignado al workspace.'
+      )
       setMemberEmail('')
     } catch (err) {
       setMemberError((err as Error).message)
@@ -230,7 +237,7 @@ export default function WorkspaceSettings() {
 
       <Section
         title="Usuarios con acceso"
-        description="El usuario ya debe existir en Supabase (Authentication → Users → Invite user) antes de poder asignarlo aquí."
+        description="Invitá a un usuario por email. Si no tiene cuenta todavía, le llega un mail para crear su contraseña."
       >
         <div className="flex gap-2">
           <input
@@ -241,12 +248,14 @@ export default function WorkspaceSettings() {
           />
           <button
             onClick={handleAddMember}
-            className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+            disabled={inviteMember.isPending}
+            className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
           >
-            Agregar
+            {inviteMember.isPending ? 'Invitando…' : 'Invitar'}
           </button>
         </div>
         {memberError && <p className="text-sm text-red-600">{memberError}</p>}
+        {memberSuccess && <p className="text-sm text-green-600">{memberSuccess}</p>}
 
         <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
           {(members ?? []).map((m) => (
