@@ -5,6 +5,46 @@ import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
 import { STATUS_LABELS, STATUS_ORDER, RATING_LABELS } from '../hooks/useLeads'
 import LeadDrawer from '../components/LeadDrawer'
+import QualityScore from '../components/QualityScore'
+import { leadQualityScore } from '../lib/leadQuality'
+
+type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
+type SortDirection = 'asc' | 'desc'
+
+const STATUS_RANK: Record<LeadStatus, number> = { nuevo: 0, contactado: 1, cotizado: 2, ganado: 3, perdido: 4 }
+const RATING_RANK: Record<LeadRating, number> = { malo: 0, regular: 1, bueno: 2 }
+
+function sortValue(lead: Lead, key: SortKey): string | number {
+  switch (key) {
+    case 'created_at':
+      return new Date(lead.created_at).getTime()
+    case 'name':
+      return `${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim().toLowerCase()
+    case 'contact':
+      return (lead.email ?? '').toLowerCase()
+    case 'inquiry_type':
+      return (lead.inquiry_type ?? '').toLowerCase()
+    case 'source_channel':
+      return (lead.source_channel ?? '').toLowerCase()
+    case 'quality':
+      return leadQualityScore(lead)
+    case 'status':
+      return STATUS_RANK[lead.status]
+    case 'rating':
+      return lead.rating ? RATING_RANK[lead.rating] : -1
+  }
+}
+
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'created_at', label: 'Fecha' },
+  { key: 'name', label: 'Nombre' },
+  { key: 'contact', label: 'Contacto' },
+  { key: 'inquiry_type', label: 'Consulta' },
+  { key: 'source_channel', label: 'Fuente' },
+  { key: 'quality', label: 'Calidad' },
+  { key: 'status', label: 'Estado' },
+  { key: 'rating', label: 'Calificación' },
+]
 
 export default function LeadsPage() {
   const { workspaceId } = useParams()
@@ -14,20 +54,41 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
   const [showSpam, setShowSpam] = useState(false)
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'created_at',
+    direction: 'desc',
+  })
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    )
+  }
 
   const filtered = useMemo(() => {
     if (!leads) return []
-    return leads.filter((lead) => {
+    const rows = leads.filter((lead) => {
       if (!showSpam && lead.is_spam) return false
       if (statusFilter !== 'all' && lead.status !== statusFilter) return false
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
       if (search) {
-        const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.inquiry_type ?? ''}`.toLowerCase()
+        const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
         if (!haystack.includes(search.toLowerCase())) return false
       }
       return true
     })
-  }, [leads, statusFilter, ratingFilter, search, showSpam])
+
+    const dir = sort.direction === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const av = sortValue(a, sort.key)
+      const bv = sortValue(b, sort.key)
+      if (av < bv) return -1 * dir
+      if (av > bv) return 1 * dir
+      return 0
+    })
+  }, [leads, statusFilter, ratingFilter, search, showSpam, sort])
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando leads…</div>
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando leads.</div>
@@ -41,7 +102,7 @@ export default function LeadsPage() {
 
       <div className="flex flex-wrap gap-3">
         <input
-          placeholder="Buscar por nombre, email, consulta…"
+          placeholder="Buscar por nombre, email, consulta, empresa…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm min-w-56"
@@ -80,13 +141,18 @@ export default function LeadsPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase">
             <tr>
-              <th className="px-4 py-2.5">Fecha</th>
-              <th className="px-4 py-2.5">Nombre</th>
-              <th className="px-4 py-2.5">Contacto</th>
-              <th className="px-4 py-2.5">Consulta</th>
-              <th className="px-4 py-2.5">Fuente</th>
-              <th className="px-4 py-2.5">Estado</th>
-              <th className="px-4 py-2.5">Calificación</th>
+              {COLUMNS.map(({ key, label }) => (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(key)}
+                  className="px-4 py-2.5 cursor-pointer select-none hover:text-slate-700"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {label}
+                    {sort.key === key && <span>{sort.direction === 'asc' ? '↑' : '↓'}</span>}
+                  </span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -110,6 +176,9 @@ export default function LeadsPage() {
                 <td className="px-4 py-2.5 text-slate-600">{lead.inquiry_type}</td>
                 <td className="px-4 py-2.5 text-slate-500">{lead.source_channel ?? '—'}</td>
                 <td className="px-4 py-2.5">
+                  <QualityScore score={leadQualityScore(lead)} />
+                </td>
+                <td className="px-4 py-2.5">
                   <StatusBadge status={lead.status} />
                 </td>
                 <td className="px-4 py-2.5">
@@ -119,7 +188,7 @@ export default function LeadsPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-slate-400">
                   No hay leads que coincidan con el filtro.
                 </td>
               </tr>
