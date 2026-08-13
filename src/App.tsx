@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import SetPassword from './pages/SetPassword'
 import LeadsPage from './pages/LeadsPage'
 import KanbanPage from './pages/KanbanPage'
 import AdminWorkspaces from './pages/admin/AdminWorkspaces'
@@ -17,6 +18,9 @@ function Home() {
 }
 
 export default function App() {
+  const { passwordRecovery } = useAuth()
+  if (passwordRecovery) return <SetPassword />
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

@@ -8,8 +8,10 @@ interface AuthState {
   profile: Profile | null
   workspaces: Workspace[] // workspaces el usuario puede ver (todos si es master)
   loading: boolean
+  passwordRecovery: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  updatePassword: (password: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
@@ -19,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   async function loadProfileAndWorkspaces(userId: string) {
     const { data: profileData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
@@ -47,7 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+
       setSession(newSession)
       if (newSession) {
         setLoading(true)
@@ -70,8 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  async function updatePassword(password: string) {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (!error) setPasswordRecovery(false)
+    return { error: error?.message ?? null }
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, workspaces, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ session, profile, workspaces, loading, passwordRecovery, signIn, signOut, updatePassword }}
+    >
       {children}
     </AuthContext.Provider>
   )
