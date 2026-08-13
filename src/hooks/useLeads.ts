@@ -37,6 +37,25 @@ export function useUpdateLead(workspaceId: string | undefined) {
   })
 }
 
+export function useBulkUpdateLeads(workspaceId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      changes,
+    }: {
+      ids: string[]
+      changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>
+    }) => {
+      const { error } = await supabase.from('leads').update(changes).in('id', ids)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads', workspaceId] })
+    },
+  })
+}
+
 export const STATUS_LABELS: Record<LeadStatus, string> = {
   nuevo: 'Nuevo',
   contactado: 'Contactado',

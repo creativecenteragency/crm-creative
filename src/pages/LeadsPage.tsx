@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useLeads } from '../hooks/useLeads'
+import { useBulkUpdateLeads, useLeads, RATING_LABELS, STATUS_LABELS, STATUS_ORDER } from '../hooks/useLeads'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
-import { STATUS_LABELS, STATUS_ORDER, RATING_LABELS } from '../hooks/useLeads'
 import LeadDrawer from '../components/LeadDrawer'
 import QualityScore from '../components/QualityScore'
+import WhatsAppButton from '../components/WhatsAppButton'
 import { leadQualityScore } from '../lib/leadQuality'
 
 type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
@@ -49,6 +49,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 export default function LeadsPage() {
   const { workspaceId } = useParams()
   const { data: leads, isLoading, error } = useLeads(workspaceId)
+  const bulkUpdate = useBulkUpdateLeads(workspaceId)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -58,6 +59,9 @@ export default function LeadsPage() {
     key: 'created_at',
     direction: 'desc',
   })
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<LeadStatus>('nuevo')
+  const [bulkRating, setBulkRating] = useState<LeadRating>('bueno')
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -89,6 +93,31 @@ export default function LeadsPage() {
       return 0
     })
   }, [leads, statusFilter, ratingFilter, search, showSpam, sort])
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) return new Set()
+      const next = new Set(prev)
+      filtered.forEach((l) => next.add(l.id))
+      return next
+    })
+  }
+
+  async function applyBulk(changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>) {
+    await bulkUpdate.mutateAsync({ ids: [...selectedIds], changes })
+    setSelectedIds(new Set())
+  }
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando leads…</div>
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando leads.</div>
@@ -137,10 +166,83 @@ export default function LeadsPage() {
         </label>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-orange bg-brand-cream px-4 py-2.5 text-sm">
+          <span className="font-medium text-brand-carbon">{selectedIds.size} seleccionados</span>
+
+          <div className="flex items-center gap-1.5">
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as LeadStatus)}
+              className="rounded-md border border-brand-line px-2 py-1 text-sm"
+            >
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => applyBulk({ status: bulkStatus })}
+              disabled={bulkUpdate.isPending}
+              className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-white disabled:opacity-50"
+            >
+              Cambiar estado
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <select
+              value={bulkRating}
+              onChange={(e) => setBulkRating(e.target.value as LeadRating)}
+              className="rounded-md border border-brand-line px-2 py-1 text-sm"
+            >
+              {Object.entries(RATING_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => applyBulk({ rating: bulkRating })}
+              disabled={bulkUpdate.isPending}
+              className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-white disabled:opacity-50"
+            >
+              Calificar
+            </button>
+          </div>
+
+          <button
+            onClick={() => applyBulk({ is_spam: true })}
+            disabled={bulkUpdate.isPending}
+            className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-white disabled:opacity-50"
+          >
+            Marcar spam
+          </button>
+          <button
+            onClick={() => applyBulk({ is_spam: false })}
+            disabled={bulkUpdate.isPending}
+            className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-white disabled:opacity-50"
+          >
+            Quitar de spam
+          </button>
+
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-sm text-brand-gray hover:text-brand-carbon"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-brand-line bg-white">
         <table className="w-full text-sm">
           <thead className="bg-brand-cream text-left text-xs font-medium text-brand-gray uppercase">
             <tr>
+              <th className="px-4 py-2.5 w-8">
+                <input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} />
+              </th>
               {COLUMNS.map(({ key, label }) => (
                 <th
                   key={key}
@@ -164,6 +266,9 @@ export default function LeadsPage() {
                 onClick={() => setSelected(lead)}
                 className="cursor-pointer hover:bg-slate-50"
               >
+                <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleOne(lead.id)} />
+                </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">
                   {new Date(lead.created_at).toLocaleDateString('es-AR')}
                 </td>
@@ -173,7 +278,10 @@ export default function LeadsPage() {
                 </td>
                 <td className="px-4 py-2.5 text-slate-500">
                   <div>{lead.email}</div>
-                  <div>{lead.phone}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span>{lead.phone}</span>
+                    <WhatsAppButton phone={lead.phone} />
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-slate-600">{lead.inquiry_type}</td>
                 <td className="px-4 py-2.5 text-slate-500">{lead.source_channel || '—'}</td>
@@ -190,7 +298,7 @@ export default function LeadsPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-slate-400">
                   No hay leads que coincidan con el filtro.
                 </td>
               </tr>
