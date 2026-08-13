@@ -11,6 +11,7 @@ import {
 } from '../../hooks/useAdmin'
 import { useAuth } from '../../context/AuthContext'
 import type { Profile } from '../../types/database'
+import CsvImportSection from './CsvImportSection'
 
 const CORE_KEYS: { key: string; label: string }[] = [
   { key: 'first_name', label: 'Nombre' },
@@ -230,6 +231,13 @@ export default function WorkspaceSettings() {
         >
           Guardar mapeo
         </button>
+      </Section>
+
+      <Section
+        title="Importar leads (CSV)"
+        description="Subí un CSV con leads históricos, mapeá las columnas y confirmá para cargarlos a este workspace."
+      >
+        <CsvImportSection workspaceId={workspaceId!} />
       </Section>
 
       <Section
