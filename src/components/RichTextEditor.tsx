@@ -11,7 +11,9 @@ export default function RichTextEditor({
 }) {
   const [tab, setTab] = useState<'visual' | 'html'>('visual')
   const editableRef = useRef<HTMLDivElement>(null)
-  const lastEmitted = useRef<string>(value)
+  // arranca en null (no en `value`) a propósito: si arrancara igual a `value`, el
+  // primer efecto lo vería como "sin cambios" y nunca pintaría el contenido inicial.
+  const lastEmitted = useRef<string | null>(null)
 
   useEffect(() => {
     if (tab === 'visual' && editableRef.current && value !== lastEmitted.current) {
