@@ -45,7 +45,7 @@ export function useBulkUpdateLeads(workspaceId: string | undefined) {
       changes,
     }: {
       ids: string[]
-      changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>
+      changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam' | 'next_contact_at'>>
     }) => {
       const { error } = await supabase.from('leads').update(changes).in('id', ids)
       if (error) throw error

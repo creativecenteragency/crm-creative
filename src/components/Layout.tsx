@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
+import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import type { Workspace } from '../types/database'
 import BrandMark from './BrandMark'
 
@@ -23,13 +24,15 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 
 function WorkspaceBrand({ workspace }: { workspace: Workspace }) {
   const [imgError, setImgError] = useState(false)
+  const { data: branding } = useWorkspaceBranding(workspace.id)
+  const logoUrl = branding?.logo_url
 
-  if (workspace.logo_url && !imgError) {
+  if (logoUrl && !imgError) {
     return (
       <div className="rounded-md bg-brand-carbon px-3 py-2 flex items-center justify-center">
         {/* El logo suele ser una variante clara pensada para fondo oscuro */}
         <img
-          src={workspace.logo_url}
+          src={logoUrl}
           alt={workspace.name}
           className="max-h-7 w-auto object-contain"
           onError={() => setImgError(true)}
@@ -102,6 +105,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               </NavLink>
               <NavLink to={`/w/${currentWorkspace.id}/templates`} className={navLinkClass}>
                 Plantillas
+              </NavLink>
+              <NavLink to={`/w/${currentWorkspace.id}/settings`} className={navLinkClass}>
+                Ajustes
               </NavLink>
             </div>
           </nav>

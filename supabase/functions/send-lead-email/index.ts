@@ -57,10 +57,12 @@ Deno.serve(async (req) => {
 
   let sent = 0
   const errors: string[] = []
+  const results: { to: string; lead_id?: string; ok: boolean; error?: string }[] = []
 
   for (const item of emails) {
     if (!item?.to || !item?.subject || !item?.html) {
       errors.push('missing_to_subject_or_html')
+      results.push({ to: item?.to ?? '', lead_id: item?.lead_id, ok: false, error: 'missing_to_subject_or_html' })
       continue
     }
     const res = await fetch('https://api.resend.com/emails', {
@@ -68,9 +70,25 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM_EMAIL, to: item.to, subject: item.subject, html: item.html }),
     })
-    if (res.ok) sent++
-    else errors.push(await res.text())
+    if (res.ok) {
+      sent++
+      results.push({ to: item.to, lead_id: item.lead_id, ok: true })
+      if (item.lead_id) {
+        await admin.from('lead_emails').insert({
+          lead_id: item.lead_id,
+          workspace_id,
+          template_slot: item.template_slot ?? null,
+          subject: item.subject,
+          body_html: item.html,
+          sent_by: userData.user.id,
+        })
+      }
+    } else {
+      const errText = await res.text()
+      errors.push(errText)
+      results.push({ to: item.to, lead_id: item.lead_id, ok: false, error: errText })
+    }
   }
 
-  return json({ ok: true, sent, failed: emails.length - sent, errors })
+  return json({ ok: true, sent, failed: emails.length - sent, errors, results })
 })

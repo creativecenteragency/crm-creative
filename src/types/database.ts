@@ -51,6 +51,26 @@ export type EmailTemplate = {
   updated_at: string
 }
 
+export type WorkspaceBranding = {
+  workspace_id: string
+  logo_url: string | null
+  primary_color: string
+  signature_name: string | null
+  signature_role: string | null
+  updated_at: string
+}
+
+export type LeadEmail = {
+  id: string
+  lead_id: string
+  workspace_id: string
+  template_slot: number | null
+  subject: string
+  body_html: string
+  sent_by: string | null
+  sent_at: string
+}
+
 export type Lead = {
   id: string
   workspace_id: string
@@ -113,6 +133,18 @@ export type Database = {
         Row: EmailTemplate
         Insert: Partial<EmailTemplate> & { workspace_id: string; slot: number }
         Update: Partial<EmailTemplate>
+        Relationships: []
+      }
+      workspace_branding: {
+        Row: WorkspaceBranding
+        Insert: Partial<WorkspaceBranding> & { workspace_id: string }
+        Update: Partial<WorkspaceBranding>
+        Relationships: []
+      }
+      lead_emails: {
+        Row: LeadEmail
+        Insert: Partial<LeadEmail> & { lead_id: string; workspace_id: string; subject: string; body_html: string }
+        Update: Partial<LeadEmail>
         Relationships: []
       }
     }

@@ -34,7 +34,6 @@ export default function WorkspaceSettings() {
   const { resetPassword } = useAuth()
 
   const [name, setName] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [extraKey, setExtraKey] = useState('')
   const [extraSlug, setExtraSlug] = useState('')
@@ -47,7 +46,6 @@ export default function WorkspaceSettings() {
   useEffect(() => {
     if (workspace) {
       setName(workspace.name)
-      setLogoUrl(workspace.logo_url ?? '')
       setMapping(workspace.field_mapping ?? {})
     }
   }, [workspace])
@@ -70,7 +68,7 @@ export default function WorkspaceSettings() {
   }
 
   async function saveGeneral() {
-    await updateWorkspace.mutateAsync({ name, logo_url: logoUrl || null })
+    await updateWorkspace.mutateAsync({ name })
   }
 
   async function saveMapping() {
@@ -142,14 +140,9 @@ export default function WorkspaceSettings() {
             className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
           />
         </Field>
-        <Field label="Logo (URL)">
-          <input
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://…"
-            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
-          />
-        </Field>
+        <p className="text-xs text-slate-400">
+          El logo, color institucional y firma se configuran en "Ajustes" (visible en el menú de este workspace).
+        </p>
         <button
           onClick={saveGeneral}
           className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark"

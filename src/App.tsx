@@ -9,6 +9,7 @@ import KanbanPage from './pages/KanbanPage'
 import MetricsPage from './pages/MetricsPage'
 import FollowUpsPage from './pages/FollowUpsPage'
 import TemplatesPage from './pages/TemplatesPage'
+import BrandSettingsPage from './pages/BrandSettingsPage'
 import AdminWorkspaces from './pages/admin/AdminWorkspaces'
 import WorkspaceSettings from './pages/admin/WorkspaceSettings'
 
@@ -78,6 +79,17 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <TemplatesPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/w/:workspaceId/settings"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BrandSettingsPage />
             </Layout>
           </ProtectedRoute>
         }

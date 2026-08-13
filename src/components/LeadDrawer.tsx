@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useUpdateLead } from '../hooks/useLeads'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
-import { renderTemplate, textToHtml } from '../lib/emailTemplate'
+import { useLeadEmails } from '../hooks/useLeadEmails'
+import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
+import { useWorkspace } from '../hooks/useAdmin'
+import { ensureHtml, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 import WhatsAppButton from './WhatsAppButton'
 
@@ -20,6 +24,7 @@ export default function LeadDrawer({
   onClose: () => void
 }) {
   const updateLead = useUpdateLead(lead.workspace_id)
+  const queryClient = useQueryClient()
   const ratings: LeadRating[] = ['bueno', 'regular', 'malo']
 
   const [status, setStatus] = useState<LeadStatus>(lead.status)
@@ -35,9 +40,14 @@ export default function LeadDrawer({
   const [justSaved, setJustSaved] = useState(false)
 
   const { data: templates } = useEmailTemplates(lead.workspace_id)
+  const { data: branding } = useWorkspaceBranding(lead.workspace_id)
+  const { data: workspace } = useWorkspace(lead.workspace_id)
+  const { data: leadEmails, isLoading: emailsLoading } = useLeadEmails(lead.id)
   const [templateSlot, setTemplateSlot] = useState<number | null>(null)
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [sendError, setSendError] = useState<string | null>(null)
+  const [showFollowUpPrompt, setShowFollowUpPrompt] = useState(false)
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null)
 
   // El prop `lead` es una foto fija tomada al abrir el drawer (no se actualiza solo),
   // así que llevamos el estado de edición acá y lo reseteamos si se abre otro lead.
@@ -56,6 +66,8 @@ export default function LeadDrawer({
     setTemplateSlot(null)
     setSendState('idle')
     setSendError(null)
+    setShowFollowUpPrompt(false)
+    setExpandedEmailId(null)
   }, [lead.id])
 
   const dirty =
@@ -78,18 +90,36 @@ export default function LeadDrawer({
     if (!lead.email || !selectedTemplate) return
     setSendState('sending')
     setSendError(null)
+    const html = wrapBrandedEmail(ensureHtml(previewBody), branding, workspace?.name ?? '')
     const { data, error } = await supabase.functions.invoke<{ sent: number }>('send-lead-email', {
       body: {
         workspace_id: lead.workspace_id,
-        emails: [{ to: lead.email, subject: previewSubject, html: textToHtml(previewBody) }],
+        emails: [
+          { to: lead.email, subject: previewSubject, html, lead_id: lead.id, template_slot: selectedTemplate.slot },
+        ],
       },
     })
     if (error || !data?.sent) {
       setSendState('error')
       setSendError(error?.message ?? 'No se pudo enviar.')
-    } else {
-      setSendState('sent')
+      return
     }
+    setSendState('sent')
+    queryClient.invalidateQueries({ queryKey: ['lead-emails', lead.id] })
+    if (status !== 'contactado' && status !== 'ganado' && status !== 'perdido') {
+      await updateLead.mutateAsync({ id: lead.id, changes: { status: 'contactado' } })
+      setStatus('contactado')
+      setBaseline((b) => ({ ...b, status: 'contactado' }))
+    }
+    setShowFollowUpPrompt(true)
+  }
+
+  async function confirmFollowUp(days: number) {
+    const date = addDays(days)
+    await updateLead.mutateAsync({ id: lead.id, changes: { next_contact_at: date } })
+    setNextContactAt(date)
+    setBaseline((b) => ({ ...b, next_contact_at: date }))
+    setShowFollowUpPrompt(false)
   }
 
   return (
@@ -236,7 +266,7 @@ export default function LeadDrawer({
               {selectedTemplate && (
                 <div className="rounded-md border border-brand-line bg-brand-cream p-3 text-xs space-y-1">
                   <p className="font-medium text-brand-carbon">{previewSubject}</p>
-                  <p className="text-slate-600 whitespace-pre-wrap">{previewBody}</p>
+                  <div className="text-slate-600" dangerouslySetInnerHTML={{ __html: ensureHtml(previewBody) }} />
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -251,7 +281,72 @@ export default function LeadDrawer({
                 {sendState === 'sent' && <span className="text-xs text-green-600">Enviado ✓</span>}
                 {sendState === 'error' && <span className="text-xs text-red-600">{sendError}</span>}
               </div>
+              {showFollowUpPrompt && (
+                <div className="rounded-md border border-brand-orange bg-brand-cream p-3 text-xs space-y-2">
+                  <p className="text-brand-carbon">Se marcó como Contactado. ¿Programamos un seguimiento?</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => confirmFollowUp(1)}
+                      className="rounded-md border border-brand-line px-2 py-1 hover:bg-white"
+                    >
+                      Mañana
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmFollowUp(3)}
+                      className="rounded-md border border-brand-line px-2 py-1 hover:bg-white"
+                    >
+                      +3 días
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmFollowUp(7)}
+                      className="rounded-md border border-brand-line px-2 py-1 hover:bg-white"
+                    >
+                      +7 días
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFollowUpPrompt(false)}
+                      className="rounded-md px-2 py-1 text-brand-gray hover:text-brand-carbon"
+                    >
+                      No, gracias
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
+          )}
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-slate-100">
+          <label className="block text-xs font-medium text-slate-500">Historial de emails</label>
+          {emailsLoading && <p className="text-xs text-slate-400">Cargando…</p>}
+          {!emailsLoading && (!leadEmails || leadEmails.length === 0) && (
+            <p className="text-xs text-slate-400">Todavía no se envió ningún email a este lead.</p>
+          )}
+          {leadEmails && leadEmails.length > 0 && (
+            <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+              {leadEmails.map((e) => (
+                <li key={e.id} className="text-xs border border-brand-line rounded-md">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedEmailId((cur) => (cur === e.id ? null : e.id))}
+                    className="w-full text-left px-2 py-1.5 flex items-center justify-between gap-2 hover:bg-brand-cream"
+                  >
+                    <span className="truncate text-slate-700">{e.subject}</span>
+                    <span className="shrink-0 text-slate-400">{new Date(e.sent_at).toLocaleDateString('es-AR')}</span>
+                  </button>
+                  {expandedEmailId === e.id && (
+                    <div
+                      className="px-2 pb-2 border-t border-slate-100 pt-2 text-slate-600 overflow-x-auto"
+                      dangerouslySetInnerHTML={{ __html: e.body_html }}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
