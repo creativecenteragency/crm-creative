@@ -10,6 +10,14 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+// No usar `new Date(iso).toLocaleDateString()` para una fecha sin hora: al pasar por
+// Date, JS la interpreta como medianoche UTC y la reconvierte a la zona local, lo que
+// en Argentina (UTC-3) la muestra un día antes. Formateamos directo desde el string.
+function formatDateOnly(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
 function dueLabel(dateStr: string): { text: string; className: string } {
   const today = todayStr()
   if (dateStr < today) return { text: 'Atrasado', className: 'bg-red-100 text-red-700' }
@@ -58,9 +66,7 @@ export default function FollowUpsPage() {
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${due.className}`}>
                       {due.text}
                     </span>
-                    <span className="ml-2 text-slate-500">
-                      {new Date(lead.next_contact_at!).toLocaleDateString('es-AR')}
-                    </span>
+                    <span className="ml-2 text-slate-500">{formatDateOnly(lead.next_contact_at!)}</span>
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-800">
                     {lead.first_name} {lead.last_name}
