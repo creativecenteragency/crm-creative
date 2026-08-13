@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { initialAuthHashParams, supabase } from '../lib/supabase'
 import type { Profile, Workspace } from '../types/database'
+
+// Los links de invitación (?type=invite) hacen que supabase-js dispare SIGNED_IN en vez
+// de PASSWORD_RECOVERY, así que el usuario invitado quedaba logueado sin haber elegido
+// nunca una contraseña. Detectamos el link de invitación explícitamente por su hash.
+const isInviteLink = initialAuthHashParams.get('type') === 'invite'
 
 interface AuthState {
   session: Session | null
@@ -44,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       if (data.session) {
+        if (isInviteLink) setPasswordRecovery(true)
         loadProfileAndWorkspaces(data.session.user.id).finally(() => setLoading(false))
       } else {
         setLoading(false)
@@ -51,7 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isInviteLink)) {
+        setPasswordRecovery(true)
+      }
 
       setSession(newSession)
       if (newSession) {
