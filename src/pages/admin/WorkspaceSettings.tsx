@@ -9,6 +9,8 @@ import {
   useWorkspaceFields,
   useWorkspaceMembers,
 } from '../../hooks/useAdmin'
+import { useAuth } from '../../context/AuthContext'
+import type { Profile } from '../../types/database'
 
 const CORE_KEYS: { key: string; label: string }[] = [
   { key: 'first_name', label: 'Nombre' },
@@ -28,6 +30,7 @@ export default function WorkspaceSettings() {
   const { data: members } = useWorkspaceMembers(workspaceId)
   const inviteMember = useInviteMember(workspaceId!)
   const removeMember = useRemoveMember(workspaceId!)
+  const { resetPassword } = useAuth()
 
   const [name, setName] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
@@ -38,6 +41,7 @@ export default function WorkspaceSettings() {
   const [memberEmail, setMemberEmail] = useState('')
   const [memberError, setMemberError] = useState<string | null>(null)
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null)
+  const [resetInfo, setResetInfo] = useState<{ id: string; ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (workspace) {
@@ -109,6 +113,17 @@ export default function WorkspaceSettings() {
     } catch (err) {
       setMemberError((err as Error).message)
     }
+  }
+
+  async function handleResetPassword(member: Profile) {
+    if (!member.email) return
+    setResetInfo(null)
+    const { error } = await resetPassword(member.email)
+    setResetInfo({
+      id: member.id,
+      ok: !error,
+      message: error ?? 'Le enviamos un email para elegir una contraseña nueva.',
+    })
   }
 
   return (
@@ -259,14 +274,29 @@ export default function WorkspaceSettings() {
 
         <div className="divide-y divide-slate-100 rounded-lg border border-brand-line">
           {(members ?? []).map((m) => (
-            <div key={m.id} className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-slate-700">{m.email ?? m.full_name ?? m.id}</span>
-              <button
-                onClick={() => removeMember.mutate(m.id)}
-                className="text-xs text-red-500 hover:underline"
-              >
-                quitar
-              </button>
+            <div key={m.id} className="px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">{m.email ?? m.full_name ?? m.id}</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleResetPassword(m)}
+                    className="text-xs text-brand-orange hover:underline"
+                  >
+                    Restablecer contraseña
+                  </button>
+                  <button
+                    onClick={() => removeMember.mutate(m.id)}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    quitar
+                  </button>
+                </div>
+              </div>
+              {resetInfo?.id === m.id && (
+                <p className={`text-xs mt-1 ${resetInfo.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  {resetInfo.message}
+                </p>
+              )}
             </div>
           ))}
           {members?.length === 0 && <p className="px-3 py-4 text-sm text-slate-400">Sin usuarios asignados.</p>}
