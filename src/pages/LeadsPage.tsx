@@ -96,8 +96,8 @@ export default function LeadsPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Leads</h1>
-        <p className="text-sm text-slate-500">{filtered.length} de {leads?.length ?? 0}</p>
+        <h1 className="text-lg font-semibold text-brand-carbon">Leads</h1>
+        <p className="text-sm text-brand-gray">{filtered.length} de {leads?.length ?? 0}</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -105,12 +105,12 @@ export default function LeadsPage() {
           placeholder="Buscar por nombre, email, consulta, empresa…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm min-w-56"
+          className="rounded-md border border-brand-line px-3 py-1.5 text-sm min-w-56 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as LeadStatus | 'all')}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
         >
           <option value="all">Todos los estados</option>
           {STATUS_ORDER.map((s) => (
@@ -122,7 +122,7 @@ export default function LeadsPage() {
         <select
           value={ratingFilter}
           onChange={(e) => setRatingFilter(e.target.value as LeadRating | 'all')}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
         >
           <option value="all">Todas las calificaciones</option>
           {Object.entries(RATING_LABELS).map(([value, label]) => (
@@ -137,19 +137,21 @@ export default function LeadsPage() {
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-brand-line bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase">
+          <thead className="bg-brand-cream text-left text-xs font-medium text-brand-gray uppercase">
             <tr>
               {COLUMNS.map(({ key, label }) => (
                 <th
                   key={key}
                   onClick={() => toggleSort(key)}
-                  className="px-4 py-2.5 cursor-pointer select-none hover:text-slate-700"
+                  className="px-4 py-2.5 cursor-pointer select-none hover:text-brand-carbon"
                 >
                   <span className="inline-flex items-center gap-1">
                     {label}
-                    {sort.key === key && <span>{sort.direction === 'asc' ? '↑' : '↓'}</span>}
+                    {sort.key === key && (
+                      <span className="text-brand-orange">{sort.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
                   </span>
                 </th>
               ))}
@@ -174,7 +176,7 @@ export default function LeadsPage() {
                   <div>{lead.phone}</div>
                 </td>
                 <td className="px-4 py-2.5 text-slate-600">{lead.inquiry_type}</td>
-                <td className="px-4 py-2.5 text-slate-500">{lead.source_channel ?? '—'}</td>
+                <td className="px-4 py-2.5 text-slate-500">{lead.source_channel || '—'}</td>
                 <td className="px-4 py-2.5">
                   <QualityScore score={leadQualityScore(lead)} />
                 </td>
