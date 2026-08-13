@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useUpdateLead } from '../hooks/useLeads'
+import WhatsAppButton from './WhatsAppButton'
 
 export default function LeadDrawer({
   lead,
@@ -11,10 +13,34 @@ export default function LeadDrawer({
   const updateLead = useUpdateLead(lead.workspace_id)
   const ratings: LeadRating[] = ['bueno', 'regular', 'malo']
 
+  const [status, setStatus] = useState<LeadStatus>(lead.status)
+  const [rating, setRating] = useState<LeadRating | null>(lead.rating)
+  const [isSpam, setIsSpam] = useState(lead.is_spam)
+  const [baseline, setBaseline] = useState({ status: lead.status, rating: lead.rating, is_spam: lead.is_spam })
+  const [justSaved, setJustSaved] = useState(false)
+
+  // El prop `lead` es una foto fija tomada al abrir el drawer (no se actualiza solo),
+  // así que llevamos el estado de edición acá y lo reseteamos si se abre otro lead.
+  useEffect(() => {
+    setStatus(lead.status)
+    setRating(lead.rating)
+    setIsSpam(lead.is_spam)
+    setBaseline({ status: lead.status, rating: lead.rating, is_spam: lead.is_spam })
+    setJustSaved(false)
+  }, [lead.id])
+
+  const dirty = status !== baseline.status || rating !== baseline.rating || isSpam !== baseline.is_spam
+
+  async function handleSave() {
+    await updateLead.mutateAsync({ id: lead.id, changes: { status, rating, is_spam: isSpam } })
+    setBaseline({ status, rating, is_spam: isSpam })
+    setJustSaved(true)
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white h-full shadow-xl p-6 overflow-y-auto space-y-6">
+      <div className="relative w-full max-w-md bg-white h-full shadow-xl p-6 overflow-y-auto space-y-6 flex flex-col">
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold text-brand-carbon">
@@ -29,7 +55,15 @@ export default function LeadDrawer({
 
         <div className="space-y-2 text-sm">
           <Field label="Email" value={lead.email} />
-          <Field label="Teléfono" value={lead.phone} />
+          {lead.phone && (
+            <div>
+              <p className="text-xs font-medium text-slate-400">Teléfono</p>
+              <p className="text-slate-700 flex items-center gap-2">
+                {lead.phone}
+                <WhatsAppButton phone={lead.phone} />
+              </p>
+            </div>
+          )}
           <Field label="Consulta" value={lead.inquiry_type} />
           <Field label="Mensaje" value={lead.message} multiline />
           <Field label="Fuente" value={sourceLabel(lead)} />
@@ -42,8 +76,8 @@ export default function LeadDrawer({
           <label className="block text-xs font-medium text-slate-500">Estado</label>
           <select
             className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
-            value={lead.status}
-            onChange={(e) => updateLead.mutate({ id: lead.id, changes: { status: e.target.value as LeadStatus } })}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as LeadStatus)}
           >
             {STATUS_ORDER.map((s) => (
               <option key={s} value={s}>
@@ -59,9 +93,9 @@ export default function LeadDrawer({
             {ratings.map((r) => (
               <button
                 key={r}
-                onClick={() => updateLead.mutate({ id: lead.id, changes: { rating: r } })}
+                onClick={() => setRating(r)}
                 className={`flex-1 rounded-md border px-3 py-2 text-sm ${
-                  lead.rating === r
+                  rating === r
                     ? 'border-brand-orange bg-brand-orange text-brand-carbon font-medium'
                     : 'border-brand-line text-slate-600 hover:bg-brand-cream'
                 }`}
@@ -76,12 +110,24 @@ export default function LeadDrawer({
           <input
             id="is_spam"
             type="checkbox"
-            checked={lead.is_spam}
-            onChange={(e) => updateLead.mutate({ id: lead.id, changes: { is_spam: e.target.checked } })}
+            checked={isSpam}
+            onChange={(e) => setIsSpam(e.target.checked)}
           />
           <label htmlFor="is_spam" className="text-sm text-slate-600">
             Marcar como spam
           </label>
+        </div>
+
+        <div className="mt-auto pt-4 border-t border-brand-line flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={!dirty || updateLead.isPending}
+            className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark disabled:opacity-50"
+          >
+            {updateLead.isPending ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+          {justSaved && !dirty && !updateLead.isPending && <span className="text-xs text-green-600">Guardado ✓</span>}
+          {updateLead.isError && <span className="text-xs text-red-600">Error al guardar.</span>}
         </div>
       </div>
     </div>
