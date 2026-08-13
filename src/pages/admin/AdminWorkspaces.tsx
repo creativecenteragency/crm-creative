@@ -16,19 +16,19 @@ export default function AdminWorkspaces() {
 
   return (
     <div className="p-6 max-w-3xl space-y-6">
-      <h1 className="text-lg font-semibold text-slate-900">Clientes</h1>
+      <h1 className="text-lg font-semibold text-brand-carbon">Clientes</h1>
 
       <form onSubmit={handleCreate} className="flex gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nombre del cliente (ej: Salvaguarda)"
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="flex-1 rounded-md border border-brand-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
         />
         <button
           type="submit"
           disabled={createWorkspace.isPending}
-          className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark disabled:opacity-50"
         >
           + Nuevo cliente
         </button>
@@ -40,18 +40,18 @@ export default function AdminWorkspaces() {
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
       {error && <p className="text-sm text-red-600">Error cargando clientes.</p>}
 
-      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100 rounded-lg border border-brand-line bg-white">
         {(workspaces ?? []).map((ws) => (
           <Link
             key={ws.id}
             to={`/admin/workspaces/${ws.id}`}
-            className="flex items-center justify-between px-4 py-3 hover:bg-slate-50"
+            className="flex items-center justify-between px-4 py-3 hover:bg-brand-cream"
           >
             <div>
-              <p className="text-sm font-medium text-slate-800">{ws.name}</p>
+              <p className="text-sm font-medium text-brand-carbon">{ws.name}</p>
               <p className="text-xs text-slate-400">{ws.slug}</p>
             </div>
-            <span className="text-slate-400 text-sm">Configurar →</span>
+            <span className="text-brand-orange text-sm">Configurar →</span>
           </Link>
         ))}
         {workspaces?.length === 0 && (

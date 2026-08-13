@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import LeadsPage from './pages/LeadsPage'
 import KanbanPage from './pages/KanbanPage'
+import MetricsPage from './pages/MetricsPage'
 import AdminWorkspaces from './pages/admin/AdminWorkspaces'
 import WorkspaceSettings from './pages/admin/WorkspaceSettings'
 
@@ -53,6 +54,17 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <KanbanPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/w/:workspaceId/metrics"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <MetricsPage />
             </Layout>
           </ProtectedRoute>
         }

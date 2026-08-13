@@ -114,7 +114,7 @@ export default function WorkspaceSettings() {
   return (
     <div className="p-6 max-w-3xl space-y-8">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">{workspace.name}</h1>
+        <h1 className="text-lg font-semibold text-brand-carbon">{workspace.name}</h1>
         <p className="text-sm text-slate-400">/{workspace.slug}</p>
       </div>
 
@@ -123,7 +123,7 @@ export default function WorkspaceSettings() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
           />
         </Field>
         <Field label="Logo (URL)">
@@ -131,12 +131,12 @@ export default function WorkspaceSettings() {
             value={logoUrl}
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://…"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
           />
         </Field>
         <button
           onClick={saveGeneral}
-          className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+          className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark"
         >
           Guardar
         </button>
@@ -144,10 +144,10 @@ export default function WorkspaceSettings() {
 
       <Section title="Webhook de Forminator" description="Pegá esta URL en el webhook de Forminator para que los leads entren directo al CRM.">
         <div className="flex gap-2">
-          <input readOnly value={webhookUrl} className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs font-mono bg-slate-50" />
+          <input readOnly value={webhookUrl} className="flex-1 rounded-md border border-brand-line px-3 py-2 text-xs font-mono bg-brand-cream" />
           <button
             onClick={() => navigator.clipboard.writeText(webhookUrl)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+            className="rounded-md border border-brand-line px-3 py-2 text-sm hover:bg-brand-cream"
           >
             Copiar
           </button>
@@ -166,7 +166,7 @@ export default function WorkspaceSettings() {
                 value={mapping[key] ?? ''}
                 onChange={(e) => updateMappingKey(key, e.target.value)}
                 placeholder="ej: name-1"
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                className="rounded-md border border-brand-line px-3 py-1.5 text-sm font-mono"
               />
             </div>
           ))}
@@ -180,7 +180,7 @@ export default function WorkspaceSettings() {
                   <input
                     value={slug}
                     onChange={(e) => updateMappingKey(key, e.target.value)}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                    className="rounded-md border border-brand-line px-3 py-1.5 text-sm font-mono"
                   />
                   <button onClick={() => removeExtraField(key)} className="text-xs text-red-500 hover:underline">
                     quitar
@@ -195,13 +195,13 @@ export default function WorkspaceSettings() {
               value={extraKey}
               onChange={(e) => setExtraKey(e.target.value)}
               placeholder="nombre interno (ej: company)"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
             />
             <input
               value={extraSlug}
               onChange={(e) => setExtraSlug(e.target.value)}
               placeholder="slug de Forminator"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-mono"
+              className="rounded-md border border-brand-line px-3 py-1.5 text-sm font-mono"
             />
             <button onClick={addExtraField} className="text-xs text-slate-600 hover:underline">
               + agregar
@@ -211,7 +211,7 @@ export default function WorkspaceSettings() {
 
         <button
           onClick={saveMapping}
-          className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+          className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark"
         >
           Guardar mapeo
         </button>
@@ -225,11 +225,11 @@ export default function WorkspaceSettings() {
           value={inquiryOptions}
           onChange={(e) => setInquiryOptions(e.target.value)}
           placeholder="Cursos, Equipos DEA"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
         />
         <button
           onClick={saveInquiryOptions}
-          className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+          className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark"
         >
           Guardar opciones
         </button>
@@ -244,12 +244,12 @@ export default function WorkspaceSettings() {
             value={memberEmail}
             onChange={(e) => setMemberEmail(e.target.value)}
             placeholder="email@cliente.com"
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="flex-1 rounded-md border border-brand-line px-3 py-2 text-sm"
           />
           <button
             onClick={handleAddMember}
             disabled={inviteMember.isPending}
-            className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold px-4 py-2 hover:bg-brand-orange-dark disabled:opacity-50"
           >
             {inviteMember.isPending ? 'Invitando…' : 'Invitar'}
           </button>
@@ -257,7 +257,7 @@ export default function WorkspaceSettings() {
         {memberError && <p className="text-sm text-red-600">{memberError}</p>}
         {memberSuccess && <p className="text-sm text-green-600">{memberSuccess}</p>}
 
-        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        <div className="divide-y divide-slate-100 rounded-lg border border-brand-line">
           {(members ?? []).map((m) => (
             <div key={m.id} className="flex items-center justify-between px-3 py-2">
               <span className="text-sm text-slate-700">{m.email ?? m.full_name ?? m.id}</span>
@@ -286,9 +286,9 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="space-y-3 bg-white border border-slate-200 rounded-lg p-4">
+    <section className="space-y-3 bg-white border border-brand-line rounded-lg p-4">
       <div>
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+        <h2 className="text-sm font-semibold text-brand-carbon">{title}</h2>
         {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
       </div>
       {children}

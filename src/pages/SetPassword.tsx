@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
+import BrandMark from '../components/BrandMark'
 
 export default function SetPassword() {
   const { updatePassword } = useAuth()
@@ -28,37 +29,38 @@ export default function SetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-brand-cream px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-slate-200 p-8 space-y-5"
+        className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-brand-line p-8 space-y-5"
       >
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-slate-900">Elegí tu contraseña</h1>
-          <p className="text-sm text-slate-500">La vas a usar para volver a entrar la próxima vez.</p>
+          <BrandMark className="h-8 w-8 text-brand-carbon mb-2" />
+          <h1 className="text-xl font-semibold font-display text-brand-carbon">Elegí tu contraseña</h1>
+          <p className="text-sm text-brand-gray">La vas a usar para volver a entrar la próxima vez.</p>
         </div>
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-slate-700">Contraseña nueva</label>
+          <label className="block text-sm font-medium text-brand-carbon">Contraseña nueva</label>
           <input
             type="password"
             required
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
           />
         </div>
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-slate-700">Repetir contraseña</label>
+          <label className="block text-sm font-medium text-brand-carbon">Repetir contraseña</label>
           <input
             type="password"
             required
             minLength={8}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
           />
         </div>
 
@@ -67,7 +69,7 @@ export default function SetPassword() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-md bg-slate-900 text-white text-sm font-medium py-2 hover:bg-slate-800 disabled:opacity-50"
+          className="w-full rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold py-2 hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {submitting ? 'Guardando…' : 'Guardar contraseña'}
         </button>

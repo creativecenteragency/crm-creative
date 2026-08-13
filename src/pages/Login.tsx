@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import BrandMark from '../components/BrandMark'
 
 export default function Login() {
   const { session, signIn } = useAuth()
@@ -21,35 +22,36 @@ export default function Login() {
   if (session) return <Navigate to="/" replace />
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-brand-cream px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-slate-200 p-8 space-y-5"
+        className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-brand-line p-8 space-y-5"
       >
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-slate-900">CRM Creative</h1>
-          <p className="text-sm text-slate-500">Iniciá sesión para ver tus leads.</p>
+          <BrandMark className="h-8 w-8 text-brand-carbon mb-2" />
+          <h1 className="text-xl font-semibold font-display text-brand-carbon">CRM Creative</h1>
+          <p className="text-sm text-brand-gray">Iniciá sesión para ver tus leads.</p>
         </div>
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-slate-700">Email</label>
+          <label className="block text-sm font-medium text-brand-carbon">Email</label>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
           />
         </div>
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-slate-700">Contraseña</label>
+          <label className="block text-sm font-medium text-brand-carbon">Contraseña</label>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
           />
         </div>
 
@@ -58,7 +60,7 @@ export default function Login() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-md bg-slate-900 text-white text-sm font-medium py-2 hover:bg-slate-800 disabled:opacity-50"
+          className="w-full rounded-md bg-brand-orange text-brand-carbon text-sm font-semibold py-2 hover:bg-brand-orange-dark disabled:opacity-50"
         >
           {submitting ? 'Ingresando…' : 'Ingresar'}
         </button>

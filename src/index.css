@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-orange: #f98105;
+  --color-brand-orange-dark: #d96f00;
+  --color-brand-carbon: #151515;
+  --color-brand-cream: #f4f1ec;
+  --color-brand-gray: #7d7b78;
+  --color-brand-line: #d8d5d0;
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+}
+
 :root {
   color-scheme: light dark;
 }
@@ -10,5 +21,10 @@ html, body, #root {
 
 body {
   margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }

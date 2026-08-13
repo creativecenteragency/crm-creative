@@ -17,7 +17,7 @@ export default function LeadDrawer({
       <div className="relative w-full max-w-md bg-white h-full shadow-xl p-6 overflow-y-auto space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-brand-carbon">
               {lead.first_name} {lead.last_name}
             </h2>
             <p className="text-sm text-slate-500">{new Date(lead.created_at).toLocaleString('es-AR')}</p>
@@ -41,7 +41,7 @@ export default function LeadDrawer({
         <div className="space-y-1">
           <label className="block text-xs font-medium text-slate-500">Estado</label>
           <select
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
             value={lead.status}
             onChange={(e) => updateLead.mutate({ id: lead.id, changes: { status: e.target.value as LeadStatus } })}
           >
@@ -62,8 +62,8 @@ export default function LeadDrawer({
                 onClick={() => updateLead.mutate({ id: lead.id, changes: { rating: r } })}
                 className={`flex-1 rounded-md border px-3 py-2 text-sm ${
                   lead.rating === r
-                    ? 'border-slate-800 bg-slate-800 text-white'
-                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                    ? 'border-brand-orange bg-brand-orange text-brand-carbon font-medium'
+                    : 'border-brand-line text-slate-600 hover:bg-brand-cream'
                 }`}
               >
                 {RATING_LABELS[r]}
