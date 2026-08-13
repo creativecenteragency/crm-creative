@@ -8,6 +8,7 @@ import LeadsPage from './pages/LeadsPage'
 import KanbanPage from './pages/KanbanPage'
 import MetricsPage from './pages/MetricsPage'
 import FollowUpsPage from './pages/FollowUpsPage'
+import TemplatesPage from './pages/TemplatesPage'
 import AdminWorkspaces from './pages/admin/AdminWorkspaces'
 import WorkspaceSettings from './pages/admin/WorkspaceSettings'
 
@@ -66,6 +67,17 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <FollowUpsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/w/:workspaceId/templates"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <TemplatesPage />
             </Layout>
           </ProtectedRoute>
         }

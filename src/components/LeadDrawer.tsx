@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useUpdateLead } from '../hooks/useLeads'
+import { useEmailTemplates } from '../hooks/useEmailTemplates'
+import { renderTemplate, textToHtml } from '../lib/emailTemplate'
+import { supabase } from '../lib/supabase'
 import WhatsAppButton from './WhatsAppButton'
 
 function addDays(n: number): string {
@@ -31,6 +34,11 @@ export default function LeadDrawer({
   })
   const [justSaved, setJustSaved] = useState(false)
 
+  const { data: templates } = useEmailTemplates(lead.workspace_id)
+  const [templateSlot, setTemplateSlot] = useState<number | null>(null)
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [sendError, setSendError] = useState<string | null>(null)
+
   // El prop `lead` es una foto fija tomada al abrir el drawer (no se actualiza solo),
   // así que llevamos el estado de edición acá y lo reseteamos si se abre otro lead.
   useEffect(() => {
@@ -45,6 +53,9 @@ export default function LeadDrawer({
       next_contact_at: lead.next_contact_at?.slice(0, 10) ?? null,
     })
     setJustSaved(false)
+    setTemplateSlot(null)
+    setSendState('idle')
+    setSendError(null)
   }, [lead.id])
 
   const dirty =
@@ -57,6 +68,28 @@ export default function LeadDrawer({
     await updateLead.mutateAsync({ id: lead.id, changes: { status, rating, is_spam: isSpam, next_contact_at: nextContactAt } })
     setBaseline({ status, rating, is_spam: isSpam, next_contact_at: nextContactAt })
     setJustSaved(true)
+  }
+
+  const selectedTemplate = templates?.find((t) => t.slot === templateSlot)
+  const previewSubject = selectedTemplate ? renderTemplate(selectedTemplate.subject, lead) : ''
+  const previewBody = selectedTemplate ? renderTemplate(selectedTemplate.body, lead) : ''
+
+  async function handleSendEmail() {
+    if (!lead.email || !selectedTemplate) return
+    setSendState('sending')
+    setSendError(null)
+    const { data, error } = await supabase.functions.invoke<{ sent: number }>('send-lead-email', {
+      body: {
+        workspace_id: lead.workspace_id,
+        emails: [{ to: lead.email, subject: previewSubject, html: textToHtml(previewBody) }],
+      },
+    })
+    if (error || !data?.sent) {
+      setSendState('error')
+      setSendError(error?.message ?? 'No se pudo enviar.')
+    } else {
+      setSendState('sent')
+    }
   }
 
   return (
@@ -175,6 +208,51 @@ export default function LeadDrawer({
             onChange={(e) => setNextContactAt(e.target.value || null)}
             className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
           />
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-slate-100">
+          <label className="block text-xs font-medium text-slate-500">Enviar email</label>
+          {!lead.email && <p className="text-xs text-slate-400">Este lead no tiene email.</p>}
+          {lead.email && (!templates || templates.length === 0) && (
+            <p className="text-xs text-slate-400">Todavía no hay plantillas creadas (ver Plantillas en el menú).</p>
+          )}
+          {lead.email && templates && templates.length > 0 && (
+            <>
+              <select
+                value={templateSlot ?? ''}
+                onChange={(e) => {
+                  setTemplateSlot(e.target.value ? Number(e.target.value) : null)
+                  setSendState('idle')
+                }}
+                className="w-full rounded-md border border-brand-line px-3 py-2 text-sm"
+              >
+                <option value="">Elegí una plantilla</option>
+                {templates.map((t) => (
+                  <option key={t.slot} value={t.slot}>
+                    {t.name || `Plantilla ${t.slot}`}
+                  </option>
+                ))}
+              </select>
+              {selectedTemplate && (
+                <div className="rounded-md border border-brand-line bg-brand-cream p-3 text-xs space-y-1">
+                  <p className="font-medium text-brand-carbon">{previewSubject}</p>
+                  <p className="text-slate-600 whitespace-pre-wrap">{previewBody}</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendEmail}
+                  disabled={!selectedTemplate || sendState === 'sending'}
+                  className="rounded-md border border-brand-line px-3 py-1.5 text-sm hover:bg-brand-cream disabled:opacity-50"
+                >
+                  {sendState === 'sending' ? 'Enviando…' : 'Enviar email'}
+                </button>
+                {sendState === 'sent' && <span className="text-xs text-green-600">Enviado ✓</span>}
+                {sendState === 'error' && <span className="text-xs text-red-600">{sendError}</span>}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">

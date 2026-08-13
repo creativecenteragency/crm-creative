@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useBulkUpdateLeads, useLeads, RATING_LABELS, STATUS_LABELS, STATUS_ORDER } from '../hooks/useLeads'
+import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
 import LeadDrawer from '../components/LeadDrawer'
 import QualityScore from '../components/QualityScore'
 import WhatsAppButton from '../components/WhatsAppButton'
 import { leadQualityScore } from '../lib/leadQuality'
+import { renderTemplate, textToHtml } from '../lib/emailTemplate'
+import { supabase } from '../lib/supabase'
 
 type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
 type SortDirection = 'asc' | 'desc'
@@ -50,6 +53,7 @@ export default function LeadsPage() {
   const { workspaceId } = useParams()
   const { data: leads, isLoading, error } = useLeads(workspaceId)
   const bulkUpdate = useBulkUpdateLeads(workspaceId)
+  const { data: templates } = useEmailTemplates(workspaceId)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -62,6 +66,9 @@ export default function LeadsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<LeadStatus>('nuevo')
   const [bulkRating, setBulkRating] = useState<LeadRating>('bueno')
+  const [bulkTemplateSlot, setBulkTemplateSlot] = useState<number | null>(null)
+  const [bulkEmailState, setBulkEmailState] = useState<'idle' | 'sending'>('idle')
+  const [bulkEmailResult, setBulkEmailResult] = useState<string | null>(null)
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -117,6 +124,34 @@ export default function LeadsPage() {
   async function applyBulk(changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>) {
     await bulkUpdate.mutateAsync({ ids: [...selectedIds], changes })
     setSelectedIds(new Set())
+  }
+
+  const bulkTemplate = templates?.find((t) => t.slot === bulkTemplateSlot)
+
+  async function handleBulkSendEmail() {
+    if (!bulkTemplate) return
+    const targets = (leads ?? []).filter((l) => selectedIds.has(l.id) && l.email)
+    if (targets.length === 0) {
+      setBulkEmailResult('Ninguno de los seleccionados tiene email.')
+      return
+    }
+    setBulkEmailState('sending')
+    setBulkEmailResult(null)
+    const emails = targets.map((lead) => ({
+      to: lead.email!,
+      subject: renderTemplate(bulkTemplate.subject, lead),
+      html: textToHtml(renderTemplate(bulkTemplate.body, lead)),
+    }))
+    const { data, error } = await supabase.functions.invoke<{ sent: number; failed: number }>('send-lead-email', {
+      body: { workspace_id: workspaceId, emails },
+    })
+    setBulkEmailState('idle')
+    if (error) {
+      setBulkEmailResult('Error al enviar.')
+    } else {
+      setBulkEmailResult(`Enviados: ${data?.sent ?? 0}${data?.failed ? `, fallidos: ${data.failed}` : ''}.`)
+      setSelectedIds(new Set())
+    }
   }
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando leads…</div>
@@ -227,6 +262,30 @@ export default function LeadsPage() {
             Quitar de spam
           </button>
 
+          {templates && templates.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={bulkTemplateSlot ?? ''}
+                onChange={(e) => setBulkTemplateSlot(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-md border border-brand-line px-2 py-1 text-sm"
+              >
+                <option value="">Elegí plantilla…</option>
+                {templates.map((t) => (
+                  <option key={t.slot} value={t.slot}>
+                    {t.name || `Plantilla ${t.slot}`}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkSendEmail}
+                disabled={!bulkTemplate || bulkEmailState === 'sending'}
+                className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-white disabled:opacity-50"
+              >
+                {bulkEmailState === 'sending' ? 'Enviando…' : 'Enviar email'}
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => setSelectedIds(new Set())}
             className="ml-auto text-sm text-brand-gray hover:text-brand-carbon"
@@ -235,6 +294,7 @@ export default function LeadsPage() {
           </button>
         </div>
       )}
+      {bulkEmailResult && <p className="text-sm text-brand-gray">{bulkEmailResult}</p>}
 
       <div className="overflow-x-auto rounded-lg border border-brand-line bg-white">
         <table className="w-full text-sm">

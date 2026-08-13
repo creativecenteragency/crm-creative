@@ -100,6 +100,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to={`/w/${currentWorkspace.id}/metrics`} className={navLinkClass}>
                 Métricas
               </NavLink>
+              <NavLink to={`/w/${currentWorkspace.id}/templates`} className={navLinkClass}>
+                Plantillas
+              </NavLink>
             </div>
           </nav>
         )}

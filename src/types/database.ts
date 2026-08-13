@@ -41,6 +41,16 @@ export type WorkspaceMember = {
   created_at: string
 }
 
+export type EmailTemplate = {
+  id: string
+  workspace_id: string
+  slot: number
+  name: string
+  subject: string
+  body: string
+  updated_at: string
+}
+
 export type Lead = {
   id: string
   workspace_id: string
@@ -97,6 +107,12 @@ export type Database = {
         Row: Lead
         Insert: Partial<Lead> & { workspace_id: string }
         Update: Partial<Lead>
+        Relationships: []
+      }
+      email_templates: {
+        Row: EmailTemplate
+        Insert: Partial<EmailTemplate> & { workspace_id: string; slot: number }
+        Update: Partial<EmailTemplate>
         Relationships: []
       }
     }
