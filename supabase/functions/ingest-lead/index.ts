@@ -118,6 +118,12 @@ Deno.serve(async (req) => {
     core[key] = slug && flat[slug] !== undefined ? flat[slug] : null
   }
 
+  // Cuando un cliente tiene un formulario de Forminator distinto por cada tipo de
+  // consulta (en vez de un único select), el webhook URL puede fijar el valor
+  // directo con ?inquiry_type=Cursos, sin depender de un campo mapeado.
+  const inquiryOverride = new URL(req.url).searchParams.get('inquiry_type')
+  if (inquiryOverride) core.inquiry_type = inquiryOverride
+
   // Cualquier campo mapeado que no sea "core" (ej: company) va a `extra`.
   const extra: Record<string, string> = {}
   for (const [internalKey, slug] of Object.entries(mapping)) {
@@ -125,8 +131,14 @@ Deno.serve(async (req) => {
     if (flat[slug] !== undefined) extra[internalKey] = flat[slug]
   }
 
+  const sourceSlug = mapping['source_url']
   const sourceUrl =
-    flat['url-referencia'] || flat['url_referencia'] || flat['source_url'] || flat['page_url'] || null
+    (sourceSlug && flat[sourceSlug]) ||
+    flat['url-referencia'] ||
+    flat['url_referencia'] ||
+    flat['source_url'] ||
+    flat['page_url'] ||
+    null
   const source = parseSource(sourceUrl ?? undefined)
 
   const { error: insertError } = await supabase.from('leads').insert({
