@@ -1,6 +1,6 @@
 export type LeadStatus = 'nuevo' | 'contactado' | 'cotizado' | 'ganado' | 'perdido'
 export type LeadRating = 'bueno' | 'regular' | 'malo'
-export type FieldType = 'text' | 'textarea' | 'select'
+export type FieldType = 'text' | 'textarea' | 'select' | 'checkbox'
 
 // Nota: estos son `type` (no `interface`) a propósito — un `interface` con props
 // requeridas no satisface el chequeo estructural `extends Record<string, unknown>`
