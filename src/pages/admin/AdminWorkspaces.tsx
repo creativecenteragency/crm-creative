@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { useAllWorkspaces, useCreateWorkspace } from '../../hooks/useAdmin'
+import { useAllWorkspaces, useCreateWorkspace, useDeleteWorkspace } from '../../hooks/useAdmin'
 
 export default function AdminWorkspaces() {
   const { data: workspaces, isLoading, error } = useAllWorkspaces()
   const createWorkspace = useCreateWorkspace()
+  const deleteWorkspace = useDeleteWorkspace()
   const [name, setName] = useState('')
 
   async function handleCreate(e: FormEvent) {
@@ -12,6 +13,16 @@ export default function AdminWorkspaces() {
     if (!name.trim()) return
     await createWorkspace.mutateAsync(name.trim())
     setName('')
+  }
+
+  async function handleDelete(e: MouseEvent, id: string, wsName: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    const ok = window.confirm(
+      `¿Eliminar "${wsName}"? Esto borra el cliente y TODOS sus leads, plantillas y configuración de forma permanente. Esta acción no se puede deshacer.`
+    )
+    if (!ok) return
+    await deleteWorkspace.mutateAsync(id)
   }
 
   return (
@@ -51,7 +62,16 @@ export default function AdminWorkspaces() {
               <p className="text-sm font-medium text-brand-carbon">{ws.name}</p>
               <p className="text-xs text-slate-400">{ws.slug}</p>
             </div>
-            <span className="text-brand-orange text-sm">Configurar →</span>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={(e) => handleDelete(e, ws.id, ws.name)}
+                disabled={deleteWorkspace.isPending}
+                className="text-xs text-red-500 hover:underline disabled:opacity-50"
+              >
+                Eliminar
+              </button>
+              <span className="text-brand-orange text-sm">Configurar →</span>
+            </div>
           </Link>
         ))}
         {workspaces?.length === 0 && (

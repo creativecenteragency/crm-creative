@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Material de referencia de marca (PDFs, .ai, logos maestros) — no es código,
+# no hace falta versionarlo. Los assets ya usados por la app viven en src/assets/brand.
+Recursos/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

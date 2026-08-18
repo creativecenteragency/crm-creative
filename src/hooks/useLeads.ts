@@ -37,6 +37,32 @@ export function useUpdateLead(workspaceId: string | undefined) {
   })
 }
 
+export function useDeleteLead(workspaceId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('leads').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads', workspaceId] })
+    },
+  })
+}
+
+export function useBulkDeleteLeads(workspaceId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('leads').delete().in('id', ids)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads', workspaceId] })
+    },
+  })
+}
+
 export function useBulkUpdateLeads(workspaceId: string | undefined) {
   const queryClient = useQueryClient()
   return useMutation({

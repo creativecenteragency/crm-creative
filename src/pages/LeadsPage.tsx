@@ -1,6 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useBulkUpdateLeads, useLeads, RATING_LABELS, STATUS_LABELS, STATUS_ORDER } from '../hooks/useLeads'
+import {
+  useBulkDeleteLeads,
+  useBulkUpdateLeads,
+  useLeads,
+  RATING_LABELS,
+  STATUS_LABELS,
+  STATUS_ORDER,
+} from '../hooks/useLeads'
+import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import { useWorkspace } from '../hooks/useAdmin'
@@ -46,6 +54,8 @@ function sortValue(lead: Lead, key: SortKey): string | number {
   }
 }
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'created_at', label: 'Fecha' },
   { key: 'name', label: 'Nombre' },
@@ -59,8 +69,10 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 
 export default function LeadsPage() {
   const { workspaceId } = useParams()
+  const { profile } = useAuth()
   const { data: leads, isLoading, error } = useLeads(workspaceId)
   const bulkUpdate = useBulkUpdateLeads(workspaceId)
+  const bulkDelete = useBulkDeleteLeads(workspaceId)
   const { data: templates } = useEmailTemplates(workspaceId)
   const { data: branding } = useWorkspaceBranding(workspaceId)
   const { data: workspace } = useWorkspace(workspaceId)
@@ -80,6 +92,10 @@ export default function LeadsPage() {
   const [bulkEmailState, setBulkEmailState] = useState<'idle' | 'sending'>('idle')
   const [bulkEmailResult, setBulkEmailResult] = useState<string | null>(null)
   const [bulkFollowUpTargets, setBulkFollowUpTargets] = useState<string[] | null>(null)
+  const [pageSize, setPageSize] = useState<number>(25)
+  const [useCustomPageSize, setUseCustomPageSize] = useState(false)
+  const [customPageSizeInput, setCustomPageSizeInput] = useState('')
+  const [page, setPage] = useState(1)
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -112,6 +128,19 @@ export default function LeadsPage() {
     })
   }, [leads, statusFilter, ratingFilter, search, showSpam, sort])
 
+  // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
+  // para no quedar mostrando una página vacía por accidente.
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, ratingFilter, search, showSpam, sort, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = useMemo(
+    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filtered, currentPage, pageSize]
+  )
+
   const allFilteredSelected = filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))
 
   function toggleOne(id: string) {
@@ -134,6 +163,15 @@ export default function LeadsPage() {
 
   async function applyBulk(changes: Partial<Pick<Lead, 'status' | 'rating' | 'is_spam'>>) {
     await bulkUpdate.mutateAsync({ ids: [...selectedIds], changes })
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkDelete() {
+    const ok = window.confirm(
+      `¿Eliminar ${selectedIds.size} lead${selectedIds.size === 1 ? '' : 's'}? Esta acción no se puede deshacer.`
+    )
+    if (!ok) return
+    await bulkDelete.mutateAsync([...selectedIds])
     setSelectedIds(new Set())
   }
 
@@ -233,6 +271,44 @@ export default function LeadsPage() {
           <input type="checkbox" checked={showSpam} onChange={(e) => setShowSpam(e.target.checked)} />
           Mostrar spam
         </label>
+
+        <div className="flex items-center gap-1.5 ml-auto">
+          <select
+            value={useCustomPageSize ? 'custom' : String(pageSize)}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                setUseCustomPageSize(true)
+                const n = parseInt(customPageSizeInput, 10)
+                if (n > 0) setPageSize(n)
+              } else {
+                setUseCustomPageSize(false)
+                setPageSize(Number(e.target.value))
+              }
+            }}
+            className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} por página
+              </option>
+            ))}
+            <option value="custom">Personalizado</option>
+          </select>
+          {useCustomPageSize && (
+            <input
+              type="number"
+              min={1}
+              value={customPageSizeInput}
+              onChange={(e) => {
+                setCustomPageSizeInput(e.target.value)
+                const n = parseInt(e.target.value, 10)
+                if (n > 0) setPageSize(n)
+              }}
+              placeholder="Cantidad"
+              className="w-24 rounded-md border border-brand-line px-2 py-1.5 text-sm"
+            />
+          )}
+        </div>
       </div>
 
       {selectedIds.size > 0 && (
@@ -320,6 +396,16 @@ export default function LeadsPage() {
             </div>
           )}
 
+          {profile?.is_master && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDelete.isPending}
+              className="rounded-md border border-red-200 text-red-600 px-3 py-1 text-sm hover:bg-red-50 disabled:opacity-50"
+            >
+              {bulkDelete.isPending ? 'Eliminando…' : 'Eliminar'}
+            </button>
+          )}
+
           <button
             onClick={() => setSelectedIds(new Set())}
             className="ml-auto text-sm text-brand-gray hover:text-brand-carbon"
@@ -386,7 +472,7 @@ export default function LeadsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((lead) => (
+            {paginated.map((lead) => (
               <tr
                 key={lead.id}
                 onClick={() => setSelected(lead)}
@@ -432,6 +518,34 @@ export default function LeadsPage() {
           </tbody>
         </table>
       </div>
+
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between px-1 text-sm text-brand-gray">
+          <span>
+            Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} de{' '}
+            {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-brand-cream disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span>
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-brand-cream disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      )}
 
       {selected && <LeadDrawer lead={selected} onClose={() => setSelected(null)} />}
     </div>

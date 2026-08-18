@@ -65,6 +65,17 @@ export function useUpdateWorkspace(workspaceId: string) {
   })
 }
 
+export function useDeleteWorkspace() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const { error } = await supabase.from('workspaces').delete().eq('id', workspaceId)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'workspaces'] }),
+  })
+}
+
 export function useWorkspaceFields(workspaceId: string | undefined) {
   return useQuery({
     queryKey: ['admin', 'workspace-fields', workspaceId],

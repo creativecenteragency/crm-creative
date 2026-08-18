@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Lead, LeadRating, LeadStatus } from '../types/database'
-import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useUpdateLead } from '../hooks/useLeads'
+import { RATING_LABELS, STATUS_LABELS, STATUS_ORDER, useDeleteLead, useUpdateLead } from '../hooks/useLeads'
+import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useLeadEmails } from '../hooks/useLeadEmails'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
@@ -24,7 +25,9 @@ export default function LeadDrawer({
   onClose: () => void
 }) {
   const updateLead = useUpdateLead(lead.workspace_id)
+  const deleteLead = useDeleteLead(lead.workspace_id)
   const queryClient = useQueryClient()
+  const { profile } = useAuth()
   const ratings: LeadRating[] = ['bueno', 'regular', 'malo']
 
   const [status, setStatus] = useState<LeadStatus>(lead.status)
@@ -112,6 +115,14 @@ export default function LeadDrawer({
       setBaseline((b) => ({ ...b, status: 'contactado' }))
     }
     setShowFollowUpPrompt(true)
+  }
+
+  async function handleDeleteLead() {
+    const fullName = `${lead.first_name ?? ''} ${lead.last_name ?? ''}`.trim() || 'este lead'
+    const ok = window.confirm(`¿Eliminar a ${fullName}? Esta acción no se puede deshacer.`)
+    if (!ok) return
+    await deleteLead.mutateAsync(lead.id)
+    onClose()
   }
 
   async function confirmFollowUp(days: number) {
@@ -372,6 +383,15 @@ export default function LeadDrawer({
           </button>
           {justSaved && !dirty && !updateLead.isPending && <span className="text-xs text-green-600">Guardado ✓</span>}
           {updateLead.isError && <span className="text-xs text-red-600">Error al guardar.</span>}
+          {profile?.is_master && (
+            <button
+              onClick={handleDeleteLead}
+              disabled={deleteLead.isPending}
+              className="ml-auto text-xs text-red-500 hover:underline disabled:opacity-50"
+            >
+              {deleteLead.isPending ? 'Eliminando…' : 'Eliminar lead'}
+            </button>
+          )}
         </div>
       </div>
     </div>
