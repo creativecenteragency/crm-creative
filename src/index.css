@@ -12,7 +12,11 @@
 }
 
 :root {
-  color-scheme: light dark;
+  /* La app todavía es solo modo claro (el manual de marca no define paleta oscura).
+     Forzamos "light" para que los controles nativos (select, botones, date picker)
+     no tomen colores oscuros del sistema operativo y queden ilegibles sobre los
+     fondos blancos que ya define Tailwind. */
+  color-scheme: light;
 }
 
 html, body, #root {
