@@ -2,9 +2,10 @@ import { useMemo, useState, type ChangeEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { parseCsv } from '../../lib/csv'
+import { useWorkspaceFields } from '../../hooks/useAdmin'
 import type { Lead, LeadRating, LeadStatus } from '../../types/database'
 
-type TargetKey =
+type CoreKey =
   | 'created_at'
   | 'first_name'
   | 'last_name'
@@ -15,9 +16,8 @@ type TargetKey =
   | 'source_channel'
   | 'status'
   | 'rating'
-  | 'company'
 
-const TARGET_FIELDS: { key: TargetKey; label: string }[] = [
+const CORE_FIELDS: { key: CoreKey; label: string }[] = [
   { key: 'created_at', label: 'Fecha' },
   { key: 'first_name', label: 'Nombre' },
   { key: 'last_name', label: 'Apellido' },
@@ -28,8 +28,30 @@ const TARGET_FIELDS: { key: TargetKey; label: string }[] = [
   { key: 'source_channel', label: 'Fuente' },
   { key: 'status', label: 'Estado' },
   { key: 'rating', label: 'Calificación' },
-  { key: 'company', label: 'Empresa (opcional)' },
 ]
+
+const CORE_GUESSES: Record<CoreKey, string[]> = {
+  created_at: ['fecha', 'date', 'created_at'],
+  first_name: ['nombre', 'first_name', 'name'],
+  last_name: ['apellido', 'last_name'],
+  email: ['email', 'correo'],
+  phone: ['telefono', 'teléfono', 'phone'],
+  inquiry_type: ['consulta', 'tipo de consulta', 'inquiry_type'],
+  message: ['mensaje', 'message'],
+  source_channel: [
+    'fuente',
+    'source',
+    'source_channel',
+    'canal',
+    'origen',
+    'medio',
+    'utm_source',
+    'como nos conociste',
+    'cómo nos conociste',
+  ],
+  status: ['estado', 'status'],
+  rating: ['calificacion', 'calificación', 'rating'],
+}
 
 const STATUS_MAP: Record<string, LeadStatus> = {
   nuevo: 'nuevo',
@@ -81,10 +103,23 @@ const CHUNK_SIZE = 200
 
 export default function CsvImportSection({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient()
+  // Los "campos adicionales" configurados en Ajustes (selects, checkboxes, texto libre)
+  // se suman como columnas mapeables más, para que el CSV pueda traer esos valores igual
+  // que el webhook de Forminator los guarda en `extra`.
+  const { data: workspaceFields } = useWorkspaceFields(workspaceId)
+  const customFields = useMemo(
+    () => (workspaceFields ?? []).filter((f) => f.key !== 'inquiry_type'),
+    [workspaceFields]
+  )
+  const targetFields = useMemo(
+    () => [...CORE_FIELDS, ...customFields.map((f) => ({ key: f.key, label: f.label }))],
+    [customFields]
+  )
+
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState<string[][]>([])
   const [headers, setHeaders] = useState<string[]>([])
-  const [mapping, setMapping] = useState<Partial<Record<TargetKey, string>>>({})
+  const [mapping, setMapping] = useState<Record<string, string>>({})
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [result, setResult] = useState<{ inserted: number; failed: number } | null>(null)
@@ -92,7 +127,7 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
 
   const dataRows = rows.slice(1)
 
-  function cell(row: string[], key: TargetKey): string | undefined {
+  function cell(row: string[], key: string): string | undefined {
     const header = mapping[key]
     if (!header) return undefined
     const idx = headers.indexOf(header)
@@ -101,7 +136,11 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
   }
 
   function buildLead(row: string[]): Partial<Lead> & { workspace_id: string } {
-    const company = cell(row, 'company')
+    const extra: Record<string, string> = {}
+    for (const f of customFields) {
+      const v = cell(row, f.key)
+      if (v) extra[f.key] = v
+    }
     return {
       workspace_id: workspaceId,
       created_at: parseDate(cell(row, 'created_at')),
@@ -115,11 +154,11 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
       status: normalizeStatus(cell(row, 'status')),
       rating: normalizeRating(cell(row, 'rating')),
       is_spam: false,
-      extra: company ? { company } : {},
+      extra,
     }
   }
 
-  const preview = useMemo(() => dataRows.slice(0, 5).map(buildLead), [dataRows, mapping, headers])
+  const preview = useMemo(() => dataRows.slice(0, 5).map(buildLead), [dataRows, mapping, headers, customFields])
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -137,34 +176,16 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
       setHeaders(parsed[0])
       setRows(parsed)
       // Auto-mapeo por coincidencia de nombre de columna.
-      const guess: Partial<Record<TargetKey, string>> = {}
-      const lowerHeaders = parsed[0].map((h) => h.toLowerCase())
-      const guesses: Record<TargetKey, string[]> = {
-        created_at: ['fecha', 'date', 'created_at'],
-        first_name: ['nombre', 'first_name', 'name'],
-        last_name: ['apellido', 'last_name'],
-        email: ['email', 'correo'],
-        phone: ['telefono', 'teléfono', 'phone'],
-        inquiry_type: ['consulta', 'tipo de consulta', 'inquiry_type'],
-        message: ['mensaje', 'message'],
-        source_channel: [
-          'fuente',
-          'source',
-          'source_channel',
-          'canal',
-          'origen',
-          'medio',
-          'utm_source',
-          'como nos conociste',
-          'cómo nos conociste',
-        ],
-        status: ['estado', 'status'],
-        rating: ['calificacion', 'calificación', 'rating'],
-        company: ['empresa', 'company'],
-      }
-      for (const field of TARGET_FIELDS) {
-        const idx = lowerHeaders.findIndex((h) => guesses[field.key].includes(h.trim()))
+      const guess: Record<string, string> = {}
+      const lowerHeaders = parsed[0].map((h) => h.toLowerCase().trim())
+      for (const field of CORE_FIELDS) {
+        const idx = lowerHeaders.findIndex((h) => CORE_GUESSES[field.key].includes(h))
         if (idx !== -1) guess[field.key] = parsed[0][idx]
+      }
+      for (const f of customFields) {
+        const candidates = [f.key.toLowerCase(), f.label.toLowerCase()]
+        const idx = lowerHeaders.findIndex((h) => candidates.includes(h))
+        if (idx !== -1) guess[f.key] = parsed[0][idx]
       }
       setMapping(guess)
     }
@@ -228,12 +249,19 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
           </p>
 
           <div className="grid grid-cols-2 gap-2">
-            {TARGET_FIELDS.map(({ key, label }) => (
+            {targetFields.map(({ key, label }) => (
               <div key={key} className="grid grid-cols-2 gap-2 items-center">
                 <label className="text-sm text-slate-600">{label}</label>
                 <select
                   value={mapping[key] ?? ''}
-                  onChange={(e) => setMapping((prev) => ({ ...prev, [key]: e.target.value || undefined }))}
+                  onChange={(e) =>
+                    setMapping((prev) => {
+                      const next = { ...prev }
+                      if (e.target.value) next[key] = e.target.value
+                      else delete next[key]
+                      return next
+                    })
+                  }
                   className="rounded-md border border-brand-line px-2 py-1.5 text-sm"
                 >
                   <option value="">No importar</option>
@@ -260,6 +288,11 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
                     <th className="px-2 py-1.5">Consulta</th>
                     <th className="px-2 py-1.5">Fuente</th>
                     <th className="px-2 py-1.5">Estado</th>
+                    {customFields.map((f) => (
+                      <th key={f.key} className="px-2 py-1.5">
+                        {f.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -276,6 +309,11 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
                       <td className="px-2 py-1.5">{lead.inquiry_type}</td>
                       <td className="px-2 py-1.5">{lead.source_channel}</td>
                       <td className="px-2 py-1.5">{lead.status}</td>
+                      {customFields.map((f) => (
+                        <td key={f.key} className="px-2 py-1.5">
+                          {lead.extra?.[f.key]}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
