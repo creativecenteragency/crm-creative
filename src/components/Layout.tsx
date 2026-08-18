@@ -109,6 +109,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to={`/w/${currentWorkspace.id}/settings`} className={navLinkClass}>
                 Ajustes
               </NavLink>
+              <NavLink to={`/w/${currentWorkspace.id}/config`} className={navLinkClass}>
+                Configuración
+              </NavLink>
             </div>
           </nav>
         )}

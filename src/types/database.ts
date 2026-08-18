@@ -71,6 +71,15 @@ export type LeadEmail = {
   sent_at: string
 }
 
+export type LeadColumnConfig = { key: string; visible: boolean }
+
+export type LeadsColumnPreferences = {
+  user_id: string
+  workspace_id: string
+  columns: LeadColumnConfig[]
+  updated_at: string
+}
+
 export type Lead = {
   id: string
   workspace_id: string
@@ -147,8 +156,19 @@ export type Database = {
         Update: Partial<LeadEmail>
         Relationships: []
       }
+      leads_column_preferences: {
+        Row: LeadsColumnPreferences
+        Insert: Partial<LeadsColumnPreferences> & { user_id: string; workspace_id: string }
+        Update: Partial<LeadsColumnPreferences>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      update_workspace_field_mapping: {
+        Args: { p_workspace_id: string; p_field_mapping: Record<string, string> }
+        Returns: void
+      }
+    }
   }
 }

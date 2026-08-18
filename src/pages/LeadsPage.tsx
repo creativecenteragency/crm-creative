@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useBulkDeleteLeads,
@@ -11,8 +11,9 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
-import { useWorkspace } from '../hooks/useAdmin'
-import type { Lead, LeadRating, LeadStatus } from '../types/database'
+import { useWorkspace, useWorkspaceFields } from '../hooks/useAdmin'
+import { useLeadsColumnPreferences, useUpdateLeadsColumnPreferences } from '../hooks/useLeadsColumnPreferences'
+import type { Lead, LeadColumnConfig, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
 import LeadDrawer from '../components/LeadDrawer'
 import QualityScore from '../components/QualityScore'
@@ -25,6 +26,10 @@ function addDays(n: number): string {
   const d = new Date()
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
+}
+
+function normalizeEmail(email: string | null): string {
+  return (email ?? '').trim().toLowerCase()
 }
 
 type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
@@ -56,15 +61,84 @@ function sortValue(lead: Lead, key: SortKey): string | number {
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'created_at', label: 'Fecha' },
-  { key: 'name', label: 'Nombre' },
-  { key: 'contact', label: 'Contacto' },
-  { key: 'inquiry_type', label: 'Consulta' },
-  { key: 'source_channel', label: 'Fuente' },
-  { key: 'quality', label: 'Calidad' },
-  { key: 'status', label: 'Estado' },
-  { key: 'rating', label: 'Calificación' },
+type ColumnDef = {
+  key: string
+  label: string
+  sortKey?: SortKey
+  cellClassName?: string
+  render: (lead: Lead) => ReactNode
+}
+
+// Columnas base del CRM. Las columnas de "campos adicionales" (definidas por
+// workspace en Ajustes/Configuración) se agregan dinámicamente más abajo con
+// el prefijo "extra:" para no chocar con estas keys.
+const CORE_COLUMNS: ColumnDef[] = [
+  {
+    key: 'created_at',
+    label: 'Fecha',
+    sortKey: 'created_at',
+    cellClassName: 'whitespace-nowrap text-slate-500',
+    render: (lead) => new Date(lead.created_at).toLocaleDateString('es-AR'),
+  },
+  {
+    key: 'name',
+    label: 'Nombre',
+    sortKey: 'name',
+    cellClassName: 'font-medium text-slate-800',
+    render: (lead) => (
+      <>
+        {lead.first_name} {lead.last_name}
+        {lead.is_spam && <span className="ml-2 text-xs text-red-500">spam</span>}
+      </>
+    ),
+  },
+  {
+    key: 'contact',
+    label: 'Contacto',
+    sortKey: 'contact',
+    cellClassName: 'text-slate-500',
+    render: (lead) => (
+      <>
+        <div>{lead.email}</div>
+        <div className="flex items-center gap-1.5">
+          <span>{lead.phone}</span>
+          <WhatsAppButton phone={lead.phone} />
+        </div>
+      </>
+    ),
+  },
+  {
+    key: 'inquiry_type',
+    label: 'Consulta',
+    sortKey: 'inquiry_type',
+    cellClassName: 'text-slate-600',
+    render: (lead) => lead.inquiry_type,
+  },
+  {
+    key: 'source_channel',
+    label: 'Fuente',
+    sortKey: 'source_channel',
+    cellClassName: 'text-slate-500',
+    render: (lead) => lead.source_channel || '—',
+  },
+  {
+    key: 'quality',
+    label: 'Calidad',
+    sortKey: 'quality',
+    render: (lead) => <QualityScore score={leadQualityScore(lead)} />,
+  },
+  {
+    key: 'status',
+    label: 'Estado',
+    sortKey: 'status',
+    render: (lead) => <StatusBadge status={lead.status} />,
+  },
+  {
+    key: 'rating',
+    label: 'Calificación',
+    sortKey: 'rating',
+    render: (lead) => <RatingBadge rating={lead.rating} />,
+  },
 ]
 
 export default function LeadsPage() {
@@ -76,11 +150,15 @@ export default function LeadsPage() {
   const { data: templates } = useEmailTemplates(workspaceId)
   const { data: branding } = useWorkspaceBranding(workspaceId)
   const { data: workspace } = useWorkspace(workspaceId)
+  const { data: workspaceFields } = useWorkspaceFields(workspaceId)
+  const { data: savedColumnConfig } = useLeadsColumnPreferences(workspaceId)
+  const updateColumnPrefs = useUpdateLeadsColumnPreferences(workspaceId)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
   const [showSpam, setShowSpam] = useState(false)
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'created_at',
     direction: 'desc',
@@ -96,6 +174,65 @@ export default function LeadsPage() {
   const [useCustomPageSize, setUseCustomPageSize] = useState(false)
   const [customPageSizeInput, setCustomPageSizeInput] = useState('')
   const [page, setPage] = useState(1)
+  const [columnConfig, setColumnConfig] = useState<LeadColumnConfig[]>([])
+  const [showColumnsMenu, setShowColumnsMenu] = useState(false)
+
+  const customColumns = useMemo<ColumnDef[]>(
+    () =>
+      (workspaceFields ?? [])
+        .filter((f) => f.key !== 'inquiry_type')
+        .map((f) => ({
+          key: `extra:${f.key}`,
+          label: f.label,
+          cellClassName: 'text-slate-600',
+          render: (lead: Lead) => lead.extra?.[f.key] ?? '',
+        })),
+    [workspaceFields]
+  )
+
+  const availableColumns = useMemo(() => [...CORE_COLUMNS, ...customColumns], [customColumns])
+  const columnByKey = useMemo(() => new Map(availableColumns.map((c) => [c.key, c])), [availableColumns])
+
+  // Concilia la preferencia guardada del usuario con las columnas realmente
+  // disponibles hoy: descarta keys que ya no existen (ej. un campo adicional
+  // borrado) y agrega al final, visibles, las columnas nuevas que no estaban
+  // guardadas todavía.
+  useEffect(() => {
+    if (savedColumnConfig === undefined) return
+    const availableKeys = availableColumns.map((c) => c.key)
+    const base = savedColumnConfig && savedColumnConfig.length > 0 ? savedColumnConfig : availableColumns.map((c) => ({ key: c.key, visible: true }))
+    const reconciled = base.filter((c) => availableKeys.includes(c.key))
+    const missingKeys = availableKeys.filter((k) => !reconciled.some((c) => c.key === k))
+    setColumnConfig([...reconciled, ...missingKeys.map((k) => ({ key: k, visible: true }))])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedColumnConfig, availableColumns])
+
+  const visibleColumns = useMemo(
+    () =>
+      columnConfig
+        .filter((c) => c.visible)
+        .map((c) => columnByKey.get(c.key))
+        .filter((c): c is ColumnDef => !!c),
+    [columnConfig, columnByKey]
+  )
+
+  function persistColumnConfig(next: LeadColumnConfig[]) {
+    setColumnConfig(next)
+    updateColumnPrefs.mutate(next)
+  }
+
+  function toggleColumnVisible(key: string) {
+    persistColumnConfig(columnConfig.map((c) => (c.key === key ? { ...c, visible: !c.visible } : c)))
+  }
+
+  function moveColumn(key: string, direction: -1 | 1) {
+    const idx = columnConfig.findIndex((c) => c.key === key)
+    const targetIdx = idx + direction
+    if (idx === -1 || targetIdx < 0 || targetIdx >= columnConfig.length) return
+    const next = [...columnConfig]
+    ;[next[idx], next[targetIdx]] = [next[targetIdx], next[idx]]
+    persistColumnConfig(next)
+  }
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -105,12 +242,24 @@ export default function LeadsPage() {
     )
   }
 
+  const duplicateEmails = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const lead of leads ?? []) {
+      if (lead.is_spam) continue
+      const email = normalizeEmail(lead.email)
+      if (!email) continue
+      counts.set(email, (counts.get(email) ?? 0) + 1)
+    }
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([email]) => email))
+  }, [leads])
+
   const filtered = useMemo(() => {
     if (!leads) return []
     const rows = leads.filter((lead) => {
       if (!showSpam && lead.is_spam) return false
       if (statusFilter !== 'all' && lead.status !== statusFilter) return false
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
+      if (duplicatesOnly && !duplicateEmails.has(normalizeEmail(lead.email))) return false
       if (search) {
         const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
         if (!haystack.includes(search.toLowerCase())) return false
@@ -126,13 +275,13 @@ export default function LeadsPage() {
       if (av > bv) return 1 * dir
       return 0
     })
-  }, [leads, statusFilter, ratingFilter, search, showSpam, sort])
+  }, [leads, statusFilter, ratingFilter, search, showSpam, duplicatesOnly, duplicateEmails, sort])
 
   // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
   // para no quedar mostrando una página vacía por accidente.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, ratingFilter, search, showSpam, sort, pageSize])
+  }, [statusFilter, ratingFilter, search, showSpam, duplicatesOnly, sort, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -271,6 +420,65 @@ export default function LeadsPage() {
           <input type="checkbox" checked={showSpam} onChange={(e) => setShowSpam(e.target.checked)} />
           Mostrar spam
         </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={duplicatesOnly} onChange={(e) => setDuplicatesOnly(e.target.checked)} />
+          Ver solo duplicados
+          {duplicateEmails.size > 0 && <span className="text-brand-orange">({duplicateEmails.size})</span>}
+        </label>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowColumnsMenu((v) => !v)}
+            className="rounded-md border border-brand-line px-3 py-1.5 text-sm hover:bg-brand-cream"
+          >
+            Columnas
+          </button>
+          {showColumnsMenu && (
+            <div className="absolute z-10 mt-1 w-72 rounded-md border border-brand-line bg-white p-2 shadow-lg">
+              <div className="max-h-80 overflow-y-auto space-y-0.5">
+                {columnConfig.map((c, i) => {
+                  const col = columnByKey.get(c.key)
+                  if (!col) return null
+                  return (
+                    <div key={c.key} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-brand-cream">
+                      <input
+                        type="checkbox"
+                        checked={c.visible}
+                        onChange={() => toggleColumnVisible(c.key)}
+                        className="shrink-0"
+                      />
+                      <span className="flex-1 text-sm text-slate-700 truncate">{col.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => moveColumn(c.key, -1)}
+                        disabled={i === 0}
+                        className="text-xs text-brand-gray hover:text-brand-carbon disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveColumn(c.key, 1)}
+                        disabled={i === columnConfig.length - 1}
+                        className="text-xs text-brand-gray hover:text-brand-carbon disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowColumnsMenu(false)}
+                className="mt-2 w-full rounded-md border border-brand-line px-3 py-1 text-sm hover:bg-brand-cream"
+              >
+                Listo
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
           <select
@@ -455,15 +663,15 @@ export default function LeadsPage() {
               <th className="px-4 py-2.5 w-8">
                 <input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} />
               </th>
-              {COLUMNS.map(({ key, label }) => (
+              {visibleColumns.map((col) => (
                 <th
-                  key={key}
-                  onClick={() => toggleSort(key)}
-                  className="px-4 py-2.5 cursor-pointer select-none hover:text-brand-carbon"
+                  key={col.key}
+                  onClick={col.sortKey ? () => toggleSort(col.sortKey!) : undefined}
+                  className={`px-4 py-2.5 ${col.sortKey ? 'cursor-pointer select-none hover:text-brand-carbon' : ''}`}
                 >
                   <span className="inline-flex items-center gap-1">
-                    {label}
-                    {sort.key === key && (
+                    {col.label}
+                    {col.sortKey && sort.key === col.sortKey && (
                       <span className="text-brand-orange">{sort.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </span>
@@ -481,36 +689,16 @@ export default function LeadsPage() {
                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleOne(lead.id)} />
                 </td>
-                <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">
-                  {new Date(lead.created_at).toLocaleDateString('es-AR')}
-                </td>
-                <td className="px-4 py-2.5 font-medium text-slate-800">
-                  {lead.first_name} {lead.last_name}
-                  {lead.is_spam && <span className="ml-2 text-xs text-red-500">spam</span>}
-                </td>
-                <td className="px-4 py-2.5 text-slate-500">
-                  <div>{lead.email}</div>
-                  <div className="flex items-center gap-1.5">
-                    <span>{lead.phone}</span>
-                    <WhatsAppButton phone={lead.phone} />
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-slate-600">{lead.inquiry_type}</td>
-                <td className="px-4 py-2.5 text-slate-500">{lead.source_channel || '—'}</td>
-                <td className="px-4 py-2.5">
-                  <QualityScore score={leadQualityScore(lead)} />
-                </td>
-                <td className="px-4 py-2.5">
-                  <StatusBadge status={lead.status} />
-                </td>
-                <td className="px-4 py-2.5">
-                  <RatingBadge rating={lead.rating} />
-                </td>
+                {visibleColumns.map((col) => (
+                  <td key={col.key} className={`px-4 py-2.5 ${col.cellClassName ?? ''}`}>
+                    {col.render(lead)}
+                  </td>
+                ))}
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={visibleColumns.length + 1} className="px-4 py-8 text-center text-slate-400">
                   No hay leads que coincidan con el filtro.
                 </td>
               </tr>

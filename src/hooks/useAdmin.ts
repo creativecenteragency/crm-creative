@@ -65,6 +65,25 @@ export function useUpdateWorkspace(workspaceId: string) {
   })
 }
 
+// A diferencia de useUpdateWorkspace (UPDATE directo, solo funciona para el master
+// por RLS), este hook llama a un RPC que solo toca field_mapping y funciona tanto
+// para master como para miembros del workspace.
+export function useUpdateWorkspaceFieldMapping(workspaceId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (fieldMapping: Record<string, string>) => {
+      const { error } = await supabase.rpc('update_workspace_field_mapping', {
+        p_workspace_id: workspaceId,
+        p_field_mapping: fieldMapping,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'workspace', workspaceId] })
+    },
+  })
+}
+
 export function useDeleteWorkspace() {
   const queryClient = useQueryClient()
   return useMutation({

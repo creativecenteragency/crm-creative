@@ -1,8 +1,12 @@
 import { useMemo, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLeads, STATUS_LABELS, STATUS_ORDER, RATING_LABELS } from '../hooks/useLeads'
+import { useWorkspaceFields } from '../hooks/useAdmin'
 import type { Lead } from '../types/database'
 import { leadQualityScore } from '../lib/leadQuality'
+import { monthKey } from '../lib/metrics'
+import MonthlyTrend from '../components/metrics/MonthlyTrend'
+import CustomReport from '../components/metrics/CustomReport'
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -18,10 +22,23 @@ function countBy(leads: Lead[], key: (l: Lead) => string | null) {
 export default function MetricsPage() {
   const { workspaceId } = useParams()
   const { data: leads, isLoading, error } = useLeads(workspaceId)
+  const { data: workspaceFields } = useWorkspaceFields(workspaceId)
 
   const metrics = useMemo(() => {
     const rows = (leads ?? []).filter((l) => !l.is_spam)
     const total = rows.length
+
+    const now = new Date()
+    const thisMonthKey = monthKey(now)
+    const lastMonthKey = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+    const thisMonthCount = rows.filter((l) => monthKey(l.created_at) === thisMonthKey).length
+    const lastMonthCount = rows.filter((l) => monthKey(l.created_at) === lastMonthKey).length
+    const momChange =
+      lastMonthCount > 0
+        ? Math.round(((thisMonthCount - lastMonthCount) / lastMonthCount) * 100)
+        : thisMonthCount > 0
+          ? 100
+          : 0
 
     const byStatus = STATUS_ORDER.map((s) => ({
       label: STATUS_LABELS[s],
@@ -48,7 +65,19 @@ export default function MetricsPage() {
 
     const recent = rows.filter((l) => Date.now() - new Date(l.created_at).getTime() <= THIRTY_DAYS_MS).length
 
-    return { total, byStatus, byRating, bySource, byInquiry, winRate, avgQuality, recent }
+    return {
+      total,
+      byStatus,
+      byRating,
+      bySource,
+      byInquiry,
+      winRate,
+      avgQuality,
+      recent,
+      thisMonthCount,
+      lastMonthCount,
+      momChange,
+    }
   }, [leads])
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando métricas…</div>
@@ -67,7 +96,17 @@ export default function MetricsPage() {
           hint="sobre ganados + perdidos"
         />
         <StatCard label="Calidad promedio" value={metrics.avgQuality} hint="sobre 100" />
+        <StatCard
+          label="Este mes"
+          value={metrics.thisMonthCount}
+          hint={`${metrics.momChange >= 0 ? '+' : ''}${metrics.momChange}% vs mes anterior (${metrics.lastMonthCount})`}
+          hintClassName={metrics.momChange > 0 ? 'text-green-600' : metrics.momChange < 0 ? 'text-red-500' : undefined}
+        />
       </div>
+
+      <Panel title="Leads por mes">
+        <MonthlyTrend leads={leads ?? []} />
+      </Panel>
 
       <div className="grid sm:grid-cols-2 gap-4">
         <Panel title="Por estado">
@@ -83,16 +122,28 @@ export default function MetricsPage() {
           <BarList items={metrics.byInquiry.slice(0, 8)} />
         </Panel>
       </div>
+
+      <CustomReport leads={leads ?? []} workspaceFields={workspaceFields ?? []} />
     </div>
   )
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+function StatCard({
+  label,
+  value,
+  hint,
+  hintClassName,
+}: {
+  label: string
+  value: string | number
+  hint?: string
+  hintClassName?: string
+}) {
   return (
     <div className="rounded-lg border border-brand-line bg-white p-4">
       <p className="text-xs font-medium text-brand-gray">{label}</p>
       <p className="text-2xl font-semibold font-display text-brand-carbon mt-1">{value}</p>
-      {hint && <p className="text-xs text-slate-400 mt-0.5">{hint}</p>}
+      {hint && <p className={`text-xs mt-0.5 ${hintClassName ?? 'text-slate-400'}`}>{hint}</p>}
     </div>
   )
 }
