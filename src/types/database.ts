@@ -71,6 +71,16 @@ export type LeadEmail = {
   sent_at: string
 }
 
+export type PushSubscriptionRow = {
+  id: string
+  user_id: string
+  workspace_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  created_at: string
+}
+
 export type LeadColumnConfig = { key: string; visible: boolean }
 
 export type LeadsColumnPreferences = {
@@ -160,6 +170,18 @@ export type Database = {
         Row: LeadsColumnPreferences
         Insert: Partial<LeadsColumnPreferences> & { user_id: string; workspace_id: string }
         Update: Partial<LeadsColumnPreferences>
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: PushSubscriptionRow
+        Insert: Partial<PushSubscriptionRow> & {
+          user_id: string
+          workspace_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+        }
+        Update: Partial<PushSubscriptionRow>
         Relationships: []
       }
     }

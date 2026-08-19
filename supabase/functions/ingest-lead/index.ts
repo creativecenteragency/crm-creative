@@ -8,9 +8,58 @@
 // URL a configurar en Forminator: https://<project-ref>.supabase.co/functions/v1/ingest-lead?token=<webhook_token>
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import webpush from 'npm:web-push@3'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const APP_URL = Deno.env.get('APP_URL') ?? 'https://creativecenteragency.github.io/crm-creative'
+const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:mkt.creativecenter@gmail.com'
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+}
+
+// Avisa por Web Push a los dispositivos que se suscribieron a este workspace.
+// No debe romper la respuesta del webhook si algo falla acá: cada envío va
+// en su propio try/catch, y una suscripción vencida (404/410) se borra sola.
+async function notifyNewLead(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  workspaceName: string,
+  leadName: string
+) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return
+
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .eq('workspace_id', workspaceId)
+
+  if (!subs || subs.length === 0) return
+
+  const payload = JSON.stringify({
+    title: `Nuevo lead — ${workspaceName}`,
+    body: leadName || 'Sin nombre',
+    url: `${APP_URL}/w/${workspaceId}/leads`,
+  })
+
+  for (const sub of subs as any[]) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload
+      )
+    } catch (err: any) {
+      if (err?.statusCode === 404 || err?.statusCode === 410) {
+        await supabase.from('push_subscriptions').delete().eq('id', sub.id)
+      } else {
+        console.error('push_failed', err)
+      }
+    }
+  }
+}
 
 const CORE_KEYS = ['first_name', 'last_name', 'email', 'phone', 'message', 'inquiry_type'] as const
 
@@ -101,7 +150,7 @@ Deno.serve(async (req) => {
 
   const { data: workspace, error: wsError } = await supabase
     .from('workspaces')
-    .select('id, field_mapping')
+    .select('id, name, field_mapping')
     .eq('webhook_token', token)
     .maybeSingle()
 
@@ -159,6 +208,13 @@ Deno.serve(async (req) => {
   if (insertError) {
     console.error(insertError)
     return json({ error: 'insert_failed' }, 500)
+  }
+
+  const leadName = `${core.first_name ?? ''} ${core.last_name ?? ''}`.trim()
+  try {
+    await notifyNewLead(supabase, workspace.id, (workspace as any).name ?? '', leadName)
+  } catch (err) {
+    console.error('notifyNewLead_failed', err)
   }
 
   return json({ ok: true })

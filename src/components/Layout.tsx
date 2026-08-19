@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
+import { usePushSubscription } from '../hooks/usePushSubscription'
 import type { Workspace } from '../types/database'
 import BrandMark from './BrandMark'
 
@@ -42,6 +43,49 @@ function WorkspaceBrand({ workspace }: { workspace: Workspace }) {
   }
 
   return <p className="text-sm font-semibold font-display text-brand-carbon px-1">{workspace.name}</p>
+}
+
+function PushNotificationToggle({ workspaceId }: { workspaceId: string }) {
+  const { isSupported, isSubscribed, isLoading, subscribe, unsubscribe } = usePushSubscription(workspaceId)
+  const [error, setError] = useState<string | null>(null)
+
+  async function toggle() {
+    setError(null)
+    try {
+      if (isSubscribed) await unsubscribe.mutateAsync()
+      else await subscribe.mutateAsync()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  if (!isSupported) {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    if (!isIOS || isStandalone) return null
+    return (
+      <p className="px-2 pt-1 text-xs text-brand-gray">
+        Para recibir avisos de leads en este iPhone, agregá esta app a tu pantalla de inicio primero.
+      </p>
+    )
+  }
+
+  return (
+    <div className="pt-1">
+      <button
+        onClick={toggle}
+        disabled={isLoading || subscribe.isPending || unsubscribe.isPending}
+        className={`w-full text-left rounded-md border-l-2 px-2.5 py-1.5 text-sm transition-colors disabled:opacity-50 ${
+          isSubscribed
+            ? 'border-brand-orange bg-white text-brand-carbon font-medium shadow-sm'
+            : 'border-transparent text-brand-gray hover:bg-white/70 hover:text-brand-carbon'
+        }`}
+      >
+        🔔 {isSubscribed ? 'Avisos activados' : 'Avisarme de leads nuevos'}
+      </button>
+      {error && <p className="text-xs text-red-600 mt-1 px-2">{error}</p>}
+    </div>
+  )
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -112,6 +156,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to={`/w/${currentWorkspace.id}/config`} className={navLinkClass}>
                 Configuración
               </NavLink>
+            </div>
+            <div className="pt-2 mt-2 border-t border-brand-line">
+              <PushNotificationToggle workspaceId={currentWorkspace.id} />
             </div>
           </nav>
         )}
