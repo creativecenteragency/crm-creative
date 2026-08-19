@@ -4,6 +4,7 @@ import { useLeads } from '../hooks/useLeads'
 import type { Lead } from '../types/database'
 import { StatusBadge } from '../components/LeadBadges'
 import WhatsAppButton from '../components/WhatsAppButton'
+import LeadCard from '../components/LeadCard'
 import LeadDrawer from '../components/LeadDrawer'
 
 function todayStr(): string {
@@ -40,13 +41,13 @@ export default function FollowUpsPage() {
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando seguimientos.</div>
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-brand-carbon">Seguimientos</h1>
         <p className="text-sm text-brand-gray">{followUps.length} pendientes</p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-brand-line bg-white">
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-brand-line bg-white">
         <table className="w-full text-sm">
           <thead className="bg-brand-cream text-left text-xs font-medium text-brand-gray uppercase">
             <tr>
@@ -94,6 +95,28 @@ export default function FollowUpsPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-2 md:hidden">
+        {followUps.map((lead) => {
+          const due = dueLabel(lead.next_contact_at!.slice(0, 10))
+          return (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onClick={() => setSelected(lead)}
+              dateText={formatDateOnly(lead.next_contact_at!)}
+              dateBadge={
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${due.className}`}>
+                  {due.text}
+                </span>
+              }
+            />
+          )
+        })}
+        {followUps.length === 0 && (
+          <p className="px-4 py-8 text-center text-slate-400 text-sm">No hay seguimientos programados.</p>
+        )}
       </div>
 
       {selected && <LeadDrawer lead={selected} onClose={() => setSelected(null)} />}

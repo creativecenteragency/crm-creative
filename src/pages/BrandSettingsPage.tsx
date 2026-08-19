@@ -46,7 +46,7 @@ export default function BrandSettingsPage() {
   )
 
   return (
-    <div className="p-6 max-w-3xl space-y-6">
+    <div className="p-4 sm:p-6 max-w-3xl space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-brand-carbon">Ajustes de marca</h1>
         <p className="text-sm text-brand-gray">
@@ -92,7 +92,7 @@ export default function BrandSettingsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="block text-xs font-medium text-slate-500">Firma — nombre</label>
             <input

@@ -15,6 +15,7 @@ import { useWorkspace, useWorkspaceFields } from '../hooks/useAdmin'
 import { useLeadsColumnPreferences, useUpdateLeadsColumnPreferences } from '../hooks/useLeadsColumnPreferences'
 import type { Lead, LeadColumnConfig, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
+import LeadCard from '../components/LeadCard'
 import LeadDrawer from '../components/LeadDrawer'
 import QualityScore from '../components/QualityScore'
 import WhatsAppButton from '../components/WhatsAppButton'
@@ -379,7 +380,7 @@ export default function LeadsPage() {
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando leads.</div>
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-brand-carbon">Leads</h1>
         <p className="text-sm text-brand-gray">{filtered.length} de {leads?.length ?? 0}</p>
@@ -426,7 +427,7 @@ export default function LeadsPage() {
           {duplicateEmails.size > 0 && <span className="text-brand-orange">({duplicateEmails.size})</span>}
         </label>
 
-        <div className="relative">
+        <div className="relative hidden md:block">
           <button
             type="button"
             onClick={() => setShowColumnsMenu((v) => !v)}
@@ -656,7 +657,7 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-brand-line bg-white">
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-brand-line bg-white">
         <table className="w-full text-sm">
           <thead className="bg-brand-cream text-left text-xs font-medium text-brand-gray uppercase">
             <tr>
@@ -705,6 +706,21 @@ export default function LeadsPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-2 md:hidden">
+        {paginated.map((lead) => (
+          <LeadCard
+            key={lead.id}
+            lead={lead}
+            selected={selectedIds.has(lead.id)}
+            onToggleSelect={toggleOne}
+            onClick={() => setSelected(lead)}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <p className="px-4 py-8 text-center text-slate-400 text-sm">No hay leads que coincidan con el filtro.</p>
+        )}
       </div>
 
       {filtered.length > 0 && (

@@ -18,7 +18,7 @@ export default function KanbanPage() {
   const visibleLeads = (leads ?? []).filter((l) => !l.is_spam)
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-4 sm:p-6 h-full flex flex-col">
       <h1 className="text-lg font-semibold text-brand-carbon mb-4">Kanban de leads</h1>
       <div className="flex gap-4 overflow-x-auto flex-1">
         {STATUS_ORDER.map((status) => {
@@ -61,6 +61,20 @@ export default function KanbanPage() {
                     <div className="mt-2">
                       <RatingBadge rating={lead.rating} />
                     </div>
+                    {/* El drag-and-drop es HTML5 nativo y no funciona por touch;
+                        en mobile cambiamos el estado con este select en su lugar. */}
+                    <select
+                      value={lead.status}
+                      onChange={(e) => updateLead.mutate({ id: lead.id, changes: { status: e.target.value as LeadStatus } })}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-2 w-full text-xs rounded border border-brand-line px-1.5 py-1 md:hidden"
+                    >
+                      {STATUS_ORDER.map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 ))}
                 {columnLeads.length === 0 && (

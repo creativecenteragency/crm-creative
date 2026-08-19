@@ -28,7 +28,7 @@ export default function TemplatesPage() {
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando plantillas…</div>
 
   return (
-    <div className="p-6 max-w-3xl space-y-6">
+    <div className="p-4 sm:p-6 max-w-3xl space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-brand-carbon">Plantillas de email</h1>
         <p className="text-sm text-brand-gray">

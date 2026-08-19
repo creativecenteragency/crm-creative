@@ -84,7 +84,7 @@ export default function MetricsPage() {
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando métricas.</div>
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <h1 className="text-lg font-semibold text-brand-carbon">Métricas</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

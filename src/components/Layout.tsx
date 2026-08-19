@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { NavLink, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
@@ -92,13 +92,28 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { profile, workspaces, signOut } = useAuth()
   const { workspaceId } = useParams()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId)
   const { data: leads } = useLeads(currentWorkspace?.id)
   const dueCount = dueFollowUpsCount(leads)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // Al navegar a otra pantalla, cerramos el drawer mobile solo.
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [pathname])
 
   return (
     <div className="min-h-screen flex bg-brand-cream">
-      <aside className="w-60 shrink-0 border-r border-brand-line bg-brand-cream flex flex-col">
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-40 bg-black/20 md:hidden" onClick={() => setMobileNavOpen(false)} />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform overflow-y-auto transition-transform duration-200 md:static md:z-auto md:w-60 md:translate-x-0 md:transform-none ${
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        } shrink-0 border-r border-brand-line bg-brand-cream flex flex-col`}
+      >
         <div className="p-4 border-b border-brand-line flex items-center gap-2">
           <BrandMark className="h-6 w-6 text-brand-carbon shrink-0" />
           <div>
@@ -182,9 +197,24 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-auto bg-brand-cream">
-        <div className="min-h-full bg-white">{children}</div>
-      </main>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <header className="md:hidden flex items-center gap-3 border-b border-brand-line bg-white px-4 py-3">
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menú"
+            className="text-brand-carbon text-xl leading-none px-1 py-1 rounded-md hover:bg-brand-cream"
+          >
+            ☰
+          </button>
+          <span className="text-sm font-semibold font-display text-brand-carbon truncate">
+            {currentWorkspace?.name ?? 'CRM Creative'}
+          </span>
+        </header>
+
+        <main className="flex-1 min-w-0 overflow-auto bg-brand-cream">
+          <div className="min-h-full bg-white">{children}</div>
+        </main>
+      </div>
     </div>
   )
 }
