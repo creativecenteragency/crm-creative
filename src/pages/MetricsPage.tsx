@@ -5,6 +5,7 @@ import { useWorkspaceFields } from '../hooks/useAdmin'
 import type { Lead } from '../types/database'
 import { leadQualityScore } from '../lib/leadQuality'
 import { monthKey } from '../lib/metrics'
+import { dedupeLeads } from '../lib/duplicates'
 import MonthlyTrend from '../components/metrics/MonthlyTrend'
 import CustomReport from '../components/metrics/CustomReport'
 
@@ -24,8 +25,12 @@ export default function MetricsPage() {
   const { data: leads, isLoading, error } = useLeads(workspaceId)
   const { data: workspaceFields } = useWorkspaceFields(workspaceId)
 
+  // Los duplicados (mismo email en más de un lead) se excluyen de todas las
+  // métricas, quedándonos con el registro más reciente de cada uno.
+  const dedupedLeads = useMemo(() => dedupeLeads((leads ?? []).filter((l) => !l.is_spam)), [leads])
+
   const metrics = useMemo(() => {
-    const rows = (leads ?? []).filter((l) => !l.is_spam)
+    const rows = dedupedLeads
     const total = rows.length
 
     const now = new Date()
@@ -78,7 +83,7 @@ export default function MetricsPage() {
       lastMonthCount,
       momChange,
     }
-  }, [leads])
+  }, [dedupedLeads])
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando métricas…</div>
   if (error) return <div className="p-8 text-sm text-red-600">Error cargando métricas.</div>
@@ -105,7 +110,7 @@ export default function MetricsPage() {
       </div>
 
       <Panel title="Leads por mes">
-        <MonthlyTrend leads={leads ?? []} />
+        <MonthlyTrend leads={dedupedLeads} />
       </Panel>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -123,7 +128,7 @@ export default function MetricsPage() {
         </Panel>
       </div>
 
-      <CustomReport leads={leads ?? []} workspaceFields={workspaceFields ?? []} />
+      <CustomReport leads={dedupedLeads} workspaceFields={workspaceFields ?? []} />
     </div>
   )
 }

@@ -20,6 +20,7 @@ import LeadDrawer from '../components/LeadDrawer'
 import QualityScore from '../components/QualityScore'
 import WhatsAppButton from '../components/WhatsAppButton'
 import { leadQualityScore } from '../lib/leadQuality'
+import { duplicateLeadIds } from '../lib/duplicates'
 import { ensureHtml, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 
@@ -27,10 +28,6 @@ function addDays(n: number): string {
   const d = new Date()
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
-}
-
-function normalizeEmail(email: string | null): string {
-  return (email ?? '').trim().toLowerCase()
 }
 
 type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
@@ -159,7 +156,7 @@ export default function LeadsPage() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
   const [showSpam, setShowSpam] = useState(false)
-  const [duplicatesOnly, setDuplicatesOnly] = useState(false)
+  const [hideDuplicates, setHideDuplicates] = useState(true)
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'created_at',
     direction: 'desc',
@@ -243,15 +240,9 @@ export default function LeadsPage() {
     )
   }
 
-  const duplicateEmails = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const lead of leads ?? []) {
-      if (lead.is_spam) continue
-      const email = normalizeEmail(lead.email)
-      if (!email) continue
-      counts.set(email, (counts.get(email) ?? 0) + 1)
-    }
-    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([email]) => email))
+  const duplicateIds = useMemo(() => {
+    const nonSpam = (leads ?? []).filter((lead) => !lead.is_spam)
+    return duplicateLeadIds(nonSpam)
   }, [leads])
 
   const filtered = useMemo(() => {
@@ -260,7 +251,7 @@ export default function LeadsPage() {
       if (!showSpam && lead.is_spam) return false
       if (statusFilter !== 'all' && lead.status !== statusFilter) return false
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
-      if (duplicatesOnly && !duplicateEmails.has(normalizeEmail(lead.email))) return false
+      if (hideDuplicates && duplicateIds.has(lead.id)) return false
       if (search) {
         const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
         if (!haystack.includes(search.toLowerCase())) return false
@@ -276,13 +267,13 @@ export default function LeadsPage() {
       if (av > bv) return 1 * dir
       return 0
     })
-  }, [leads, statusFilter, ratingFilter, search, showSpam, duplicatesOnly, duplicateEmails, sort])
+  }, [leads, statusFilter, ratingFilter, search, showSpam, hideDuplicates, duplicateIds, sort])
 
   // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
   // para no quedar mostrando una página vacía por accidente.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, ratingFilter, search, showSpam, duplicatesOnly, sort, pageSize])
+  }, [statusFilter, ratingFilter, search, showSpam, hideDuplicates, sort, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -422,9 +413,9 @@ export default function LeadsPage() {
           Mostrar spam
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={duplicatesOnly} onChange={(e) => setDuplicatesOnly(e.target.checked)} />
-          Ver solo duplicados
-          {duplicateEmails.size > 0 && <span className="text-brand-orange">({duplicateEmails.size})</span>}
+          <input type="checkbox" checked={hideDuplicates} onChange={(e) => setHideDuplicates(e.target.checked)} />
+          Ocultar duplicados
+          {duplicateIds.size > 0 && <span className="text-brand-orange">({duplicateIds.size})</span>}
         </label>
 
         <div className="relative hidden md:block">
