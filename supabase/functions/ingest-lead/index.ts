@@ -93,6 +93,17 @@ function flattenPayload(body: any): Record<string, string> {
   return flat
 }
 
+// El campo "slug de Forminator" del mapeo a veces se carga copiando el
+// merge-tag tal como aparece en los emails/notificaciones de Forminator
+// (ej. "{email-1}"), en vez del nombre de campo real que manda el webhook
+// ("email-1", sin llaves). Lo toleramos limpiando las llaves acá, así no
+// hace falta corregir el mapeo a mano en cada workspace afectado.
+function cleanSlug(slug: string | undefined): string | undefined {
+  const trimmed = slug?.trim()
+  if (!trimmed) return undefined
+  return trimmed.replace(/^\{+/, '').replace(/\}+$/, '')
+}
+
 function parseSource(rawUrl: string | undefined) {
   if (!rawUrl) return { source_channel: 'direct', source_campaign_id: null, landing_page: null }
 
@@ -163,7 +174,7 @@ Deno.serve(async (req) => {
 
   const core: Record<string, string | null> = {}
   for (const key of CORE_KEYS) {
-    const slug = mapping[key]
+    const slug = cleanSlug(mapping[key])
     core[key] = slug && flat[slug] !== undefined ? flat[slug] : null
   }
 
@@ -175,12 +186,13 @@ Deno.serve(async (req) => {
 
   // Cualquier campo mapeado que no sea "core" (ej: company) va a `extra`.
   const extra: Record<string, string> = {}
-  for (const [internalKey, slug] of Object.entries(mapping)) {
+  for (const [internalKey, rawSlug] of Object.entries(mapping)) {
     if ((CORE_KEYS as readonly string[]).includes(internalKey)) continue
-    if (flat[slug] !== undefined) extra[internalKey] = flat[slug]
+    const slug = cleanSlug(rawSlug)
+    if (slug && flat[slug] !== undefined) extra[internalKey] = flat[slug]
   }
 
-  const sourceSlug = mapping['source_url']
+  const sourceSlug = cleanSlug(mapping['source_url'])
   const sourceUrl =
     (sourceSlug && flat[sourceSlug]) ||
     flat['url-referencia'] ||
