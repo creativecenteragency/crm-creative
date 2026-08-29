@@ -84,8 +84,12 @@ function normalizeRating(v?: string): LeadRating | null {
   return RATING_MAP[v.trim().toLowerCase()] ?? null
 }
 
-function parseDate(v?: string): string {
-  if (!v) return new Date().toISOString()
+// Devuelve null (en vez de una fecha) cuando no pudo reconocer el formato, para que
+// el llamador pueda avisar de esto en vez de tragárselo en silencio — así fue como
+// una importación vieja terminó con 104 leads históricos fechados el día del import
+// en vez de su fecha real, e inflando las métricas de ese mes sin que nadie lo notara.
+function tryParseDate(v?: string): string | null {
+  if (!v) return null
   const trimmed = v.trim()
   const m = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
   if (m) {
@@ -96,7 +100,11 @@ function parseDate(v?: string): string {
   }
   const parsed = new Date(trimmed)
   if (!isNaN(parsed.getTime())) return parsed.toISOString()
-  return new Date().toISOString()
+  return null
+}
+
+function parseDate(v?: string): string {
+  return tryParseDate(v) ?? new Date().toISOString()
 }
 
 const CHUNK_SIZE = 200
@@ -159,6 +167,18 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
   }
 
   const preview = useMemo(() => dataRows.slice(0, 5).map(buildLead), [dataRows, mapping, headers, customFields])
+
+  // Cuántas filas tienen algo en la columna de fecha pero en un formato que no
+  // reconocemos (van a importarse con la fecha de hoy) — separado de las que
+  // directamente no tienen columna de fecha mapeada o vienen vacías, que es lo
+  // esperable y no amerita advertencia.
+  const unparsableDateCount = useMemo(() => {
+    if (!mapping.created_at) return 0
+    return dataRows.filter((row) => {
+      const raw = cell(row, 'created_at')
+      return !!raw && tryParseDate(raw) === null
+    }).length
+  }, [dataRows, mapping, headers])
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -320,6 +340,15 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
               </table>
             </div>
           </div>
+
+          {unparsableDateCount > 0 && (
+            <p className="text-sm text-amber-600">
+              ⚠️ Hay {unparsableDateCount} fila(s) con un valor en la columna de fecha que no reconocemos como fecha
+              (ej: texto, o un formato distinto a dd/mm/aaaa). Esas filas se van a importar con la fecha de hoy, lo que
+              después infla las métricas de este mes. Revisá la columna mapeada a "Fecha" antes de importar si no es
+              lo esperado.
+            </p>
+          )}
 
           <button
             onClick={handleImport}
