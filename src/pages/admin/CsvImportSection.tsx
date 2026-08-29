@@ -2,6 +2,7 @@ import { useMemo, useState, type ChangeEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { parseCsv } from '../../lib/csv'
+import { classifySource } from '../../lib/source'
 import { useWorkspaceFields } from '../../hooks/useAdmin'
 import type { Lead, LeadRating, LeadStatus } from '../../types/database'
 
@@ -149,6 +150,12 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
       const v = cell(row, f.key)
       if (v) extra[f.key] = v
     }
+    // La columna "Fuente" suele traer la URL de referencia cruda (con parámetros
+    // utm/fbclid larguísimos a veces) — la clasificamos en un canal legible
+    // (Instagram, Facebook, Google, IA, Directo, Otro) en vez de guardarla tal
+    // cual. La URL original no se pierde: queda en source_url para el detalle.
+    const rawSource = cell(row, 'source_channel')
+    const { channel, campaign } = classifySource(rawSource)
     return {
       workspace_id: workspaceId,
       created_at: parseDate(cell(row, 'created_at')),
@@ -158,7 +165,9 @@ export default function CsvImportSection({ workspaceId }: { workspaceId: string 
       phone: cell(row, 'phone') || null,
       inquiry_type: cell(row, 'inquiry_type') || null,
       message: cell(row, 'message') || null,
-      source_channel: cell(row, 'source_channel') || 'import',
+      source_channel: channel,
+      source_url: rawSource?.startsWith('http') ? rawSource : null,
+      source_campaign_id: campaign,
       status: normalizeStatus(cell(row, 'status')),
       rating: normalizeRating(cell(row, 'rating')),
       is_spam: false,

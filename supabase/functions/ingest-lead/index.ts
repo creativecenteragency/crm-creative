@@ -104,34 +104,48 @@ function cleanSlug(slug: string | undefined): string | undefined {
   return trimmed.replace(/^\{+/, '').replace(/\}+$/, '')
 }
 
+// Mismo criterio que src/lib/source.ts (classifySource) — Deno no puede importar
+// desde src/lib, así que esta lógica vive duplicada acá. Si se cambia una copia,
+// hay que cambiar la otra para que el webhook y las importaciones CSV no queden
+// desincronizados en cómo clasifican la fuente de un lead.
+const DOMAIN_CHANNELS: Record<string, string> = {
+  'instagram.com': 'Instagram',
+  'campsite.bio': 'Instagram (bio)',
+  'facebook.com': 'Facebook',
+  'm.facebook.com': 'Facebook',
+  'l.facebook.com': 'Facebook',
+  'google.com': 'Google',
+  'syndicatedsearch.goog': 'Google',
+  'chatgpt.com': 'IA',
+  'gemini.google.com': 'IA',
+  'sumate.mercatorextra.com.ar': 'Directo',
+}
+
 function parseSource(rawUrl: string | undefined) {
-  if (!rawUrl) return { source_channel: 'direct', source_campaign_id: null, landing_page: null }
+  if (!rawUrl) return { source_channel: 'Sin dato', source_campaign_id: null, landing_page: null }
 
   let url: URL
   try {
     url = new URL(rawUrl)
   } catch {
-    return { source_channel: 'direct', source_campaign_id: null, landing_page: null }
+    return { source_channel: 'Otro', source_campaign_id: null, landing_page: null }
   }
 
   const params = url.searchParams
-  const gclid = params.get('gclid')
-  const gbraid = params.get('gbraid')
-  const gadSource = params.get('gad_source')
-  const campaignId = params.get('gad_campaignid') || params.get('campaignid')
+  const campaign = params.get('utm_campaign') || params.get('gad_campaignid') || params.get('campaignid') || null
 
-  let source_channel = 'direct'
-  if (gclid || gbraid || gadSource) {
-    source_channel = 'google_ads'
-  } else if (url.search) {
-    source_channel = 'other_campaign'
+  // Un clic de Google Ads suele aterrizar en el propio dominio del cliente (es la
+  // landing page del anuncio), no en un dominio de Google — por eso esto se chequea
+  // ANTES que el dominio. No se separa "Google Ads" de "Google" orgánico: la landing
+  // prácticamente no tiene posicionamiento orgánico, así que todo lo que venga de
+  // Google, pago o no, es un solo canal.
+  if (params.get('gclid') || params.get('gbraid') || params.get('gad_source')) {
+    return { source_channel: 'Google', source_campaign_id: campaign, landing_page: url.pathname }
   }
 
-  return {
-    source_channel,
-    source_campaign_id: campaignId ?? null,
-    landing_page: url.pathname,
-  }
+  const host = url.hostname.replace(/^www\./, '')
+  const source_channel = DOMAIN_CHANNELS[host] ?? 'Otro'
+  return { source_channel, source_campaign_id: campaign, landing_page: url.pathname }
 }
 
 Deno.serve(async (req) => {
@@ -185,9 +199,11 @@ Deno.serve(async (req) => {
   if (inquiryOverride) core.inquiry_type = inquiryOverride
 
   // Cualquier campo mapeado que no sea "core" (ej: company) va a `extra`.
+  // "source_url" se excluye igual que los core: ya tiene su propia columna
+  // dedicada más abajo, así que no hace falta duplicarlo en `extra`.
   const extra: Record<string, string> = {}
   for (const [internalKey, rawSlug] of Object.entries(mapping)) {
-    if ((CORE_KEYS as readonly string[]).includes(internalKey)) continue
+    if ((CORE_KEYS as readonly string[]).includes(internalKey) || internalKey === 'source_url') continue
     const slug = cleanSlug(rawSlug)
     if (slug && flat[slug] !== undefined) extra[internalKey] = flat[slug]
   }

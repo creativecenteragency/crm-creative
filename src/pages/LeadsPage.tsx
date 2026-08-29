@@ -117,7 +117,18 @@ const CORE_COLUMNS: ColumnDef[] = [
     label: 'Fuente',
     sortKey: 'source_channel',
     cellClassName: 'text-slate-500',
-    render: (lead) => lead.source_channel || '—',
+    // Algunas fuentes son URLs de campaña con parámetros utm/fbclid larguísimos
+    // (cientos de caracteres) que, sin tope, estiran toda la columna y empujan
+    // el resto de la tabla fuera de pantalla. Se corta con "…" y el valor
+    // completo queda disponible al pasar el mouse (title) o en el detalle del lead.
+    render: (lead) =>
+      lead.source_channel ? (
+        <span className="block max-w-[220px] truncate" title={lead.source_channel}>
+          {lead.source_channel}
+        </span>
+      ) : (
+        '—'
+      ),
   },
   {
     key: 'quality',
