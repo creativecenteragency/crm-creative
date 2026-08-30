@@ -31,8 +31,7 @@ function WorkspaceBrand({ workspace }: { workspace: Workspace }) {
 
   if (logoUrl && !imgError) {
     return (
-      <div className="rounded-md bg-brand-carbon px-3 py-2 flex items-center justify-center">
-        {/* El logo suele ser una variante clara pensada para fondo oscuro */}
+      <div className="rounded-md bg-white border border-brand-line px-3 py-2 flex items-center justify-center">
         <img
           src={logoUrl}
           alt={workspace.name}
