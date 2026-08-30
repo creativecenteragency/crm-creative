@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
+import { useMyWorkspaceRole } from '../hooks/useAdmin'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import type { Workspace } from '../types/database'
@@ -96,6 +97,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId)
   const { data: leads } = useLeads(currentWorkspace?.id)
   const dueCount = dueFollowUpsCount(leads)
+  const { role: myRole } = useMyWorkspaceRole(currentWorkspace?.id)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Al navegar a otra pantalla, cerramos el drawer mobile solo.
@@ -165,12 +167,19 @@ export default function Layout({ children }: { children: ReactNode }) {
               <NavLink to={`/w/${currentWorkspace.id}/templates`} className={navLinkClass}>
                 Plantillas
               </NavLink>
-              <NavLink to={`/w/${currentWorkspace.id}/settings`} className={navLinkClass}>
-                Ajustes
-              </NavLink>
-              <NavLink to={`/w/${currentWorkspace.id}/config`} className={navLinkClass}>
-                Configuración
-              </NavLink>
+              {myRole === 'admin' && (
+                <>
+                  <NavLink to={`/w/${currentWorkspace.id}/settings`} className={navLinkClass}>
+                    Ajustes
+                  </NavLink>
+                  <NavLink to={`/w/${currentWorkspace.id}/config`} className={navLinkClass}>
+                    Configuración
+                  </NavLink>
+                  <NavLink to={`/w/${currentWorkspace.id}/usuarios`} className={navLinkClass}>
+                    Usuarios
+                  </NavLink>
+                </>
+              )}
             </div>
             <div className="pt-2 mt-2 border-t border-brand-line">
               <PushNotificationToggle workspaceId={currentWorkspace.id} />

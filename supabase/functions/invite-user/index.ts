@@ -1,9 +1,9 @@
 // Edge Function: invite-user
 //
-// Permite que un usuario MASTER invite (o asigne, si ya existe) un usuario
-// cliente a un workspace directamente desde el CRM, sin pasar por el
-// dashboard de Supabase. Requiere el JWT del usuario que llama (se valida
-// que sea master antes de hacer nada).
+// Permite que un usuario MASTER, o un admin del workspace en cuestión, invite
+// (o asigne, si ya existe) un usuario cliente a un workspace directamente
+// desde el CRM, sin pasar por el dashboard de Supabase. Requiere el JWT del
+// usuario que llama (se valida el permiso antes de hacer nada).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -29,8 +29,9 @@ Deno.serve(async (req) => {
   const token = authHeader.replace('Bearer ', '')
   if (!token) return json({ error: 'missing_auth' }, 401)
 
-  const { email, workspace_id } = await req.json().catch(() => ({}))
+  const { email, workspace_id, role } = await req.json().catch(() => ({}))
   if (!email || !workspace_id) return json({ error: 'missing_fields' }, 400)
+  const memberRole = role === 'admin' ? 'admin' : 'member'
 
   const anonClient = createClient(SUPABASE_URL, ANON_KEY)
   const { data: userData, error: userError } = await anonClient.auth.getUser(token)
@@ -44,7 +45,15 @@ Deno.serve(async (req) => {
     .eq('id', userData.user.id)
     .maybeSingle()
 
-  if (!callerProfile?.is_master) return json({ error: 'forbidden' }, 403)
+  if (!callerProfile?.is_master) {
+    const { data: callerMembership } = await admin
+      .from('workspace_members')
+      .select('role')
+      .eq('workspace_id', workspace_id)
+      .eq('user_id', userData.user.id)
+      .maybeSingle()
+    if (callerMembership?.role !== 'admin') return json({ error: 'forbidden' }, 403)
+  }
 
   const { data: existingProfile } = await admin
     .from('profiles')
@@ -64,7 +73,7 @@ Deno.serve(async (req) => {
 
   const { error: memberError } = await admin
     .from('workspace_members')
-    .upsert({ workspace_id, user_id: userId }, { onConflict: 'workspace_id,user_id' })
+    .upsert({ workspace_id, user_id: userId, role: memberRole }, { onConflict: 'workspace_id,user_id' })
 
   if (memberError) return json({ error: 'member_insert_failed', detail: memberError.message }, 500)
 

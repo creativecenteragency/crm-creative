@@ -11,6 +11,7 @@ import FollowUpsPage from './pages/FollowUpsPage'
 import TemplatesPage from './pages/TemplatesPage'
 import BrandSettingsPage from './pages/BrandSettingsPage'
 import ConfigPage from './pages/ConfigPage'
+import WorkspaceUsersPage from './pages/WorkspaceUsersPage'
 import AdminWorkspaces from './pages/admin/AdminWorkspaces'
 import WorkspaceSettings from './pages/admin/WorkspaceSettings'
 
@@ -113,6 +114,17 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <MetricsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/w/:workspaceId/usuarios"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <WorkspaceUsersPage />
             </Layout>
           </ProtectedRoute>
         }

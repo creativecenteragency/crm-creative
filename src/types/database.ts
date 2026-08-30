@@ -33,11 +33,17 @@ export type Profile = {
   full_name: string | null
   is_master: boolean
   created_at: string
+  // Se refleja desde auth.users.last_sign_in_at vía trigger — null significa que
+  // la persona nunca inició sesión (invitación pendiente), no que nunca fue invitada.
+  last_sign_in_at: string | null
 }
+
+export type WorkspaceRole = 'admin' | 'member'
 
 export type WorkspaceMember = {
   workspace_id: string
   user_id: string
+  role: WorkspaceRole
   created_at: string
 }
 

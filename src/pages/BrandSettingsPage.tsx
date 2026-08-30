@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { useUpdateWorkspaceBranding, useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
-import { useWorkspace } from '../hooks/useAdmin'
+import { useMyWorkspaceRole, useWorkspace } from '../hooks/useAdmin'
 import { wrapBrandedEmail } from '../lib/emailTemplate'
 
 export default function BrandSettingsPage() {
@@ -9,6 +9,7 @@ export default function BrandSettingsPage() {
   const { data: branding, isLoading } = useWorkspaceBranding(workspaceId)
   const { data: workspace } = useWorkspace(workspaceId)
   const update = useUpdateWorkspaceBranding(workspaceId!)
+  const { role, isLoading: roleLoading } = useMyWorkspaceRole(workspaceId)
 
   const [logoUrl, setLogoUrl] = useState('')
   const [primaryColor, setPrimaryColor] = useState('#EA6A2A')
@@ -25,7 +26,9 @@ export default function BrandSettingsPage() {
     setSaved(false)
   }, [branding])
 
-  if (isLoading) return <div className="p-8 text-sm text-slate-500">Cargando…</div>
+  if (isLoading || roleLoading) return <div className="p-8 text-sm text-slate-500">Cargando…</div>
+  if (!workspaceId) return null
+  if (role !== 'admin') return <Navigate to={`/w/${workspaceId}/leads`} replace />
 
   async function handleSave() {
     setSaving(true)

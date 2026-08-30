@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useLeadEmails } from '../hooks/useLeadEmails'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
-import { useWorkspace } from '../hooks/useAdmin'
+import { useMyWorkspaceRole, useWorkspace } from '../hooks/useAdmin'
 import { ensureHtml, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 import WhatsAppButton from './WhatsAppButton'
@@ -28,6 +28,8 @@ export default function LeadDrawer({
   const deleteLead = useDeleteLead(lead.workspace_id)
   const queryClient = useQueryClient()
   const { profile } = useAuth()
+  const { role: myRole } = useMyWorkspaceRole(lead.workspace_id)
+  const canDelete = !!profile?.is_master || myRole === 'admin'
   const ratings: LeadRating[] = ['bueno', 'regular', 'malo']
 
   const [status, setStatus] = useState<LeadStatus>(lead.status)
@@ -383,7 +385,7 @@ export default function LeadDrawer({
           </button>
           {justSaved && !dirty && !updateLead.isPending && <span className="text-xs text-green-600">Guardado ✓</span>}
           {updateLead.isError && <span className="text-xs text-red-600">Error al guardar.</span>}
-          {profile?.is_master && (
+          {canDelete && (
             <button
               onClick={handleDeleteLead}
               disabled={deleteLead.isPending}

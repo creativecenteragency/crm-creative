@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Profile, Workspace, WorkspaceField } from '../types/database'
+import { useAuth } from '../context/AuthContext'
+import type { Profile, Workspace, WorkspaceField, WorkspaceRole } from '../types/database'
+
+export type WorkspaceMemberRow = Profile & { role: WorkspaceRole }
 
 export function useAllWorkspaces() {
   return useQuery({
@@ -146,23 +149,68 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('workspace_members')
-        .select('workspace_id, user_id, created_at, profiles(*)')
+        .select('workspace_id, user_id, role, created_at, profiles(*)')
         .eq('workspace_id', workspaceId!)
       if (error) throw error
-      return (data ?? []).map((row: any) => row.profiles as Profile)
+      return (data ?? []).map((row: any) => ({ ...row.profiles, role: row.role }) as WorkspaceMemberRow)
     },
   })
+}
+
+// Rol del usuario logueado en ESTE workspace en particular (no confundir con
+// profile.is_master, que es el flag global de la agencia). role=null mientras
+// isLoading es true no significa "no es admin" — hay que esperar a que
+// termine de cargar antes de decidir mostrar/ocultar u ocultar algo en base
+// a esto, o un admin real vería un parpadeo de "acceso denegado".
+export function useMyWorkspaceRole(workspaceId: string | undefined): {
+  role: WorkspaceRole | null
+  isLoading: boolean
+} {
+  const { profile, session } = useAuth()
+  const isMaster = !!profile?.is_master
+  const query = useQuery({
+    queryKey: ['my-workspace-role', workspaceId, session?.user.id],
+    enabled: !!workspaceId && !!session && !isMaster,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', workspaceId!)
+        .eq('user_id', session!.user.id)
+        .maybeSingle()
+      if (error) throw error
+      return (data?.role ?? null) as WorkspaceRole | null
+    },
+  })
+
+  if (isMaster) return { role: 'admin', isLoading: false }
+  return { role: query.data ?? null, isLoading: query.isLoading }
 }
 
 export function useInviteMember(workspaceId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (email: string) => {
+    mutationFn: async ({ email, role }: { email: string; role: WorkspaceRole }) => {
       const { data, error } = await supabase.functions.invoke<{ ok: boolean; invited: boolean }>('invite-user', {
-        body: { email: email.trim(), workspace_id: workspaceId },
+        body: { email: email.trim(), workspace_id: workspaceId, role },
       })
       if (error) throw error
       return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'workspace-members', workspaceId] }),
+  })
+}
+
+export function useUpdateMemberRole(workspaceId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: WorkspaceRole }) => {
+      const { error } = await supabase
+        .from('workspace_members')
+        .update({ role })
+        .eq('workspace_id', workspaceId)
+        .eq('user_id', userId)
+      if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'workspace-members', workspaceId] }),
   })

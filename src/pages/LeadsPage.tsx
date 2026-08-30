@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
-import { useWorkspace, useWorkspaceFields } from '../hooks/useAdmin'
+import { useMyWorkspaceRole, useWorkspace, useWorkspaceFields } from '../hooks/useAdmin'
 import { useLeadsColumnPreferences, useUpdateLeadsColumnPreferences } from '../hooks/useLeadsColumnPreferences'
 import type { Lead, LeadColumnConfig, LeadRating, LeadStatus } from '../types/database'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
@@ -153,6 +153,8 @@ const CORE_COLUMNS: ColumnDef[] = [
 export default function LeadsPage() {
   const { workspaceId } = useParams()
   const { profile } = useAuth()
+  const { role: myRole } = useMyWorkspaceRole(workspaceId)
+  const canDelete = !!profile?.is_master || myRole === 'admin'
   const { data: leads, isLoading, error } = useLeads(workspaceId)
   const bulkUpdate = useBulkUpdateLeads(workspaceId)
   const bulkDelete = useBulkDeleteLeads(workspaceId)
@@ -607,7 +609,7 @@ export default function LeadsPage() {
             </div>
           )}
 
-          {profile?.is_master && (
+          {canDelete && (
             <button
               onClick={handleBulkDelete}
               disabled={bulkDelete.isPending}
