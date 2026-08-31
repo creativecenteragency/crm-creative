@@ -166,6 +166,7 @@ export default function LeadsPage() {
   const updateColumnPrefs = useUpdateLeadsColumnPreferences(workspaceId)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
+  const [originFilter, setOriginFilter] = useState<'all' | 'form' | 'kommo'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
   const [showSpam, setShowSpam] = useState(false)
@@ -264,6 +265,8 @@ export default function LeadsPage() {
       if (!showSpam && lead.is_spam) return false
       if (statusFilter !== 'all' && lead.status !== statusFilter) return false
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
+      if (originFilter === 'kommo' && lead.external_source !== 'kommo') return false
+      if (originFilter === 'form' && lead.external_source) return false
       if (hideDuplicates && duplicateIds.has(lead.id)) return false
       if (search) {
         const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
@@ -280,13 +283,13 @@ export default function LeadsPage() {
       if (av > bv) return 1 * dir
       return 0
     })
-  }, [leads, statusFilter, ratingFilter, search, showSpam, hideDuplicates, duplicateIds, sort])
+  }, [leads, statusFilter, ratingFilter, originFilter, search, showSpam, hideDuplicates, duplicateIds, sort])
 
   // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
   // para no quedar mostrando una página vacía por accidente.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, ratingFilter, search, showSpam, hideDuplicates, sort, pageSize])
+  }, [statusFilter, ratingFilter, originFilter, search, showSpam, hideDuplicates, sort, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -424,6 +427,15 @@ export default function LeadsPage() {
               {label}
             </option>
           ))}
+        </select>
+        <select
+          value={originFilter}
+          onChange={(e) => setOriginFilter(e.target.value as 'all' | 'form' | 'kommo')}
+          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
+        >
+          <option value="all">Todos los orígenes</option>
+          <option value="form">Formulario web</option>
+          <option value="kommo">Kommo (WhatsApp)</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={showSpam} onChange={(e) => setShowSpam(e.target.checked)} />

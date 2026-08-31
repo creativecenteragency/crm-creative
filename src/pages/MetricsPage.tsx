@@ -60,6 +60,10 @@ export default function MetricsPage() {
 
     const bySource = countBy(rows, (l) => l.source_channel)
     const byInquiry = countBy(rows, (l) => l.inquiry_type)
+    // Sistema de origen del dato (formulario web vs. sincronizado desde un CRM
+    // externo como Kommo) — distinto de "Fuente/canal", que es el medio
+    // (WhatsApp, Instagram, Google...) independientemente de por dónde entró.
+    const byOrigin = countBy(rows, (l) => (l.external_source === 'kommo' ? 'Kommo' : 'Formulario web'))
 
     const won = rows.filter((l) => l.status === 'ganado').length
     const lost = rows.filter((l) => l.status === 'perdido').length
@@ -76,6 +80,7 @@ export default function MetricsPage() {
       byRating,
       bySource,
       byInquiry,
+      byOrigin,
       winRate,
       avgQuality,
       recent,
@@ -126,6 +131,13 @@ export default function MetricsPage() {
         <Panel title="Por tipo de consulta">
           <BarList items={metrics.byInquiry.slice(0, 8)} />
         </Panel>
+        {/* Solo tiene sentido mostrarlo cuando conviven ambos orígenes — si el
+            workspace nunca sincronizó nada externo, siempre daría 100% "Formulario web". */}
+        {metrics.byOrigin.length > 1 && (
+          <Panel title="Por origen">
+            <BarList items={metrics.byOrigin} />
+          </Panel>
+        )}
       </div>
 
       <CustomReport leads={dedupedLeads} workspaceFields={workspaceFields ?? []} />
