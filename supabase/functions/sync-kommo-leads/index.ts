@@ -211,13 +211,14 @@ async function sync() {
     else upserted = count ?? registros.length
   }
 
-  const nuevoCheckpoint = topeAlcanzado ? ultimoTs : inicioTs
+  // Si el upsert falló, no avanzamos el checkpoint — si no, los leads que
+  // se revisaron pero no se llegaron a guardar quedan huérfanos para siempre
+  // (la próxima corrida ya no los volvería a pedir).
   const resultado = { revisados, upserted, errors, tope_alcanzado: topeAlcanzado }
+  const patch: Record<string, unknown> = { last_synced_at: new Date().toISOString(), last_result: resultado }
+  if (errors.length === 0) patch.last_updated_ts = topeAlcanzado ? ultimoTs : inicioTs
 
-  await admin
-    .from('kommo_sync_state')
-    .update({ last_updated_ts: nuevoCheckpoint, last_synced_at: new Date().toISOString(), last_result: resultado })
-    .eq('workspace_id', KOMMO_WORKSPACE_ID)
+  await admin.from('kommo_sync_state').update(patch).eq('workspace_id', KOMMO_WORKSPACE_ID)
 
   return resultado
 }

@@ -8,9 +8,13 @@
 alter table public.leads add column external_source text;
 alter table public.leads add column external_id text;
 
+-- Sin `where external_id is not null`: Postgres ya trata cualquier NULL como
+-- no-conflictivo en un índice único (nunca es igual a otro NULL), así que no
+-- hacía falta la condición parcial — y de hecho la rompe: el upsert de
+-- PostgREST genera un ON CONFLICT sin el WHERE, que no matchea un índice
+-- parcial como "arbiter" y tira "no unique or exclusion constraint matching".
 create unique index leads_external_unique_idx
-  on public.leads (workspace_id, external_source, external_id)
-  where external_id is not null;
+  on public.leads (workspace_id, external_source, external_id);
 
 -- Checkpoint + resultado de la última corrida, por workspace. Que exista una
 -- fila acá es lo que habilita el botón "Sincronizar ahora" en el CRM para ese
