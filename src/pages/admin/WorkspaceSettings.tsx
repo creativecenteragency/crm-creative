@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useUpdateWorkspace, useWorkspace } from '../../hooks/useAdmin'
 import WorkspaceFieldMappingSection from '../../components/WorkspaceFieldMappingSection'
 import WorkspaceUsersSection from '../../components/WorkspaceUsersSection'
+import KommoSyncSection from '../../components/KommoSyncSection'
 
 export default function WorkspaceSettings() {
   const { workspaceId } = useParams<{ workspaceId: string }>()
@@ -60,6 +61,8 @@ export default function WorkspaceSettings() {
           </button>
         </div>
       </Section>
+
+      <KommoSyncSection workspaceId={workspaceId!} />
 
       <WorkspaceFieldMappingSection workspaceId={workspaceId!} />
 

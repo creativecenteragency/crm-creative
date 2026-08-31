@@ -1,5 +1,6 @@
 import { Navigate, useParams } from 'react-router-dom'
 import WorkspaceFieldMappingSection from '../components/WorkspaceFieldMappingSection'
+import KommoSyncSection from '../components/KommoSyncSection'
 import { useMyWorkspaceRole } from '../hooks/useAdmin'
 
 export default function ConfigPage() {
@@ -15,6 +16,7 @@ export default function ConfigPage() {
         <h1 className="text-lg font-semibold text-brand-carbon">Configuración</h1>
         <p className="text-sm text-brand-gray">Mapeo de campos, campos adicionales e importación de leads.</p>
       </div>
+      <KommoSyncSection workspaceId={workspaceId} />
       <WorkspaceFieldMappingSection workspaceId={workspaceId} />
     </div>
   )

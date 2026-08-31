@@ -116,6 +116,17 @@ export type Lead = {
   rating: LeadRating | null
   is_spam: boolean
   next_contact_at: string | null
+  // Solo para leads traídos por polling desde un CRM externo (hoy: Kommo,
+  // solo Mercator). null en cualquier lead que entró por el webhook normal.
+  external_source: string | null
+  external_id: string | null
+}
+
+export type KommoSyncState = {
+  workspace_id: string
+  last_updated_ts: number
+  last_synced_at: string | null
+  last_result: { revisados: number; upserted: number; errors: string[]; tope_alcanzado: boolean } | null
 }
 
 // `Relationships: []` es una simplificación deliberada — no describimos las FKs al tipo,
@@ -164,6 +175,12 @@ export type Database = {
         Row: WorkspaceBranding
         Insert: Partial<WorkspaceBranding> & { workspace_id: string }
         Update: Partial<WorkspaceBranding>
+        Relationships: []
+      }
+      kommo_sync_state: {
+        Row: KommoSyncState
+        Insert: Partial<KommoSyncState> & { workspace_id: string }
+        Update: Partial<KommoSyncState>
         Relationships: []
       }
       lead_emails: {
