@@ -24,6 +24,15 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS_HEADERS } })
 }
 
+// Fallback por si el llamador no mandó una versión en texto plano (debería,
+// pero por las dudas). Un multipart html+text ayuda a que no caiga en spam.
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
@@ -68,7 +77,13 @@ Deno.serve(async (req) => {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM_EMAIL, to: item.to, subject: item.subject, html: item.html }),
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: item.to,
+        subject: item.subject,
+        html: item.html,
+        text: item.text || stripHtml(item.html),
+      }),
     })
     if (res.ok) {
       sent++

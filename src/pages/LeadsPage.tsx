@@ -21,7 +21,7 @@ import QualityScore from '../components/QualityScore'
 import WhatsAppButton from '../components/WhatsAppButton'
 import { leadQualityScore } from '../lib/leadQuality'
 import { duplicateLeadIds } from '../lib/duplicates'
-import { ensureHtml, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
+import { ensureHtml, htmlToPlainText, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 
 function addDays(n: number): string {
@@ -340,13 +340,17 @@ export default function LeadsPage() {
     }
     setBulkEmailState('sending')
     setBulkEmailResult(null)
-    const emails = targets.map((lead) => ({
-      to: lead.email!,
-      subject: renderTemplate(bulkTemplate.subject, lead),
-      html: wrapBrandedEmail(ensureHtml(renderTemplate(bulkTemplate.body, lead)), branding, workspace?.name ?? ''),
-      lead_id: lead.id,
-      template_slot: bulkTemplate.slot,
-    }))
+    const emails = targets.map((lead) => {
+      const html = wrapBrandedEmail(ensureHtml(renderTemplate(bulkTemplate.body, lead)), branding, workspace?.name ?? '')
+      return {
+        to: lead.email!,
+        subject: renderTemplate(bulkTemplate.subject, lead),
+        html,
+        text: htmlToPlainText(html),
+        lead_id: lead.id,
+        template_slot: bulkTemplate.slot,
+      }
+    })
     const { data, error } = await supabase.functions.invoke<{
       sent: number
       failed: number

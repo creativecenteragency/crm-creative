@@ -146,7 +146,10 @@ function TemplateCard({
             Así se ve con un lead de ejemplo (Juan Pérez). El logo, color y firma salen de{' '}
             <span className="font-medium">Ajustes</span>.
           </p>
-          <div className="bg-white rounded-md p-2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          {/* El template ahora es un documento HTML completo (para que el email se vea bien en
+              Outlook/Gmail) — un iframe lo renderiza tal cual llegaría a la bandeja de entrada,
+              sin que sus estilos inline choquen con los del resto de la app. */}
+          <iframe title="Vista previa del email" srcDoc={previewHtml} className="w-full h-[420px] rounded-md border border-brand-line bg-white" />
         </div>
       )}
     </section>

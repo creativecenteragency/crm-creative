@@ -189,7 +189,7 @@ export default function BrandSettingsPage() {
       <section className="space-y-2">
         <p className="text-xs text-slate-400">Vista previa de un email con estos ajustes:</p>
         <div className="border border-brand-line rounded-md bg-brand-cream p-4">
-          <div className="bg-white rounded-md p-2" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          <iframe title="Vista previa del email" srcDoc={previewHtml} className="w-full h-[420px] rounded-md border border-brand-line bg-white" />
         </div>
       </section>
     </div>

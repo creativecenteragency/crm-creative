@@ -7,7 +7,7 @@ import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useLeadEmails } from '../hooks/useLeadEmails'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import { useMyWorkspaceRole, useWorkspace } from '../hooks/useAdmin'
-import { ensureHtml, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
+import { ensureHtml, htmlToPlainText, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 import WhatsAppButton from './WhatsAppButton'
 
@@ -100,7 +100,14 @@ export default function LeadDrawer({
       body: {
         workspace_id: lead.workspace_id,
         emails: [
-          { to: lead.email, subject: previewSubject, html, lead_id: lead.id, template_slot: selectedTemplate.slot },
+          {
+            to: lead.email,
+            subject: previewSubject,
+            html,
+            text: htmlToPlainText(html),
+            lead_id: lead.id,
+            template_slot: selectedTemplate.slot,
+          },
         ],
       },
     })
