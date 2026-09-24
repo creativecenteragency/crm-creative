@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useUpdateWorkspace, useWorkspace } from '../../hooks/useAdmin'
-import WorkspaceFieldMappingSection from '../../components/WorkspaceFieldMappingSection'
 import WorkspaceUsersSection from '../../components/WorkspaceUsersSection'
-import KommoSyncSection from '../../components/KommoSyncSection'
+import WorkspaceLeadSourceConfig from '../../components/WorkspaceLeadSourceConfig'
 
 export default function WorkspaceSettings() {
   const { workspaceId } = useParams<{ workspaceId: string }>()
@@ -50,6 +49,7 @@ export default function WorkspaceSettings() {
         </button>
       </Section>
 
+      {workspace.lead_source !== 'kommo' && (
       <Section title="Webhook de Forminator" description="Pegá esta URL en el webhook de Forminator para que los leads entren directo al CRM.">
         <div className="flex gap-2">
           <input readOnly value={webhookUrl} className="flex-1 rounded-md border border-brand-line px-3 py-2 text-xs font-mono bg-brand-cream" />
@@ -61,10 +61,9 @@ export default function WorkspaceSettings() {
           </button>
         </div>
       </Section>
+      )}
 
-      <KommoSyncSection workspaceId={workspaceId!} />
-
-      <WorkspaceFieldMappingSection workspaceId={workspaceId!} />
+      <WorkspaceLeadSourceConfig workspaceId={workspaceId!} />
 
       <WorkspaceUsersSection workspaceId={workspaceId!} />
     </div>

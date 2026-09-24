@@ -21,6 +21,8 @@ import QualityScore from '../components/QualityScore'
 import WhatsAppButton from '../components/WhatsAppButton'
 import { leadQualityScore } from '../lib/leadQuality'
 import { duplicateLeadIds } from '../lib/duplicates'
+import { leadCountsForMetrics } from '../lib/leadValidity'
+import { useKommoSyncState } from '../hooks/useKommoSync'
 import { ensureHtml, htmlToPlainText, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
 
@@ -162,11 +164,15 @@ export default function LeadsPage() {
   const { data: branding } = useWorkspaceBranding(workspaceId)
   const { data: workspace } = useWorkspace(workspaceId)
   const { data: workspaceFields } = useWorkspaceFields(workspaceId)
+  const { data: kommoState } = useKommoSyncState(workspaceId)
+  const validTags = kommoState?.valid_tags
+  const isKommoWorkspace = workspace?.lead_source === 'kommo'
   const { data: savedColumnConfig } = useLeadsColumnPreferences(workspaceId)
   const updateColumnPrefs = useUpdateLeadsColumnPreferences(workspaceId)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
   const [originFilter, setOriginFilter] = useState<'all' | 'form' | 'kommo'>('all')
+  const [validityFilter, setValidityFilter] = useState<'all' | 'counts' | 'excluded'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
   const [showSpam, setShowSpam] = useState(false)
@@ -202,7 +208,65 @@ export default function LeadsPage() {
     [workspaceFields]
   )
 
-  const availableColumns = useMemo(() => [...CORE_COLUMNS, ...customColumns], [customColumns])
+  // Kommo trae los datos de otra forma que un formulario: en vez de campos propios
+  // del form, el lead llega con etiquetas, embudo, etapa, CUIT, etc. (guardados en
+  // extra). Solo se ofrecen esas columnas en workspaces cuya fuente activa es Kommo.
+  const kommoColumns = useMemo<ColumnDef[]>(
+    () =>
+      isKommoWorkspace
+        ? ['Etiquetas', 'Embudo', 'Etapa', 'CUIT', 'Empresa'].map((k) => ({
+            key: 'extra:' + k,
+            label: k,
+            cellClassName: 'text-slate-600',
+            render: (lead: Lead) => lead.extra?.[k] ?? '',
+          }))
+        : [],
+    [isKommoWorkspace]
+  )
+
+  // El nombre lleva la marca de los leads de Kommo que no cuentan para métricas.
+  const coreColumns = useMemo<ColumnDef[]>(
+    () =>
+      CORE_COLUMNS.map((c) =>
+        c.key === 'name'
+          ? {
+              ...c,
+              render: (lead: Lead) => (
+                <>
+                  {lead.first_name} {lead.last_name}
+                  {lead.is_spam && <span className="ml-2 text-xs text-red-500">spam</span>}
+                  {!leadCountsForMetrics(lead, validTags) && (
+                    <span
+                      className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                      title={'Sin etiqueta válida (' + (validTags ?? []).join(', ') + '): no cuenta para métricas'}
+                    >
+                      no cuenta en métricas
+                    </span>
+                  )}
+                </>
+              ),
+            }
+          : c
+      ),
+    [validTags]
+  )
+
+  const availableColumns = useMemo(() => {
+    const idx = coreColumns.findIndex((c) => c.key === 'source_channel')
+    const core = [...coreColumns.slice(0, idx + 1), ...kommoColumns, ...coreColumns.slice(idx + 1)]
+    return [...core, ...customColumns]
+  }, [coreColumns, kommoColumns, customColumns])
+
+  // Columnas por defecto según la fuente: con Kommo se ocultan las del formulario
+  // (consulta y campos adicionales de Forminator), que en leads de Kommo van vacías.
+  const defaultColumnConfig = useMemo<LeadColumnConfig[]>(
+    () =>
+      availableColumns.map((c) => ({
+        key: c.key,
+        visible: !isKommoWorkspace || (c.key !== 'inquiry_type' && !customColumns.some((cc) => cc.key === c.key)),
+      })),
+    [availableColumns, isKommoWorkspace, customColumns]
+  )
   const columnByKey = useMemo(() => new Map(availableColumns.map((c) => [c.key, c])), [availableColumns])
 
   // Concilia la preferencia guardada del usuario con las columnas realmente
@@ -212,12 +276,13 @@ export default function LeadsPage() {
   useEffect(() => {
     if (savedColumnConfig === undefined) return
     const availableKeys = availableColumns.map((c) => c.key)
-    const base = savedColumnConfig && savedColumnConfig.length > 0 ? savedColumnConfig : availableColumns.map((c) => ({ key: c.key, visible: true }))
+    const base = savedColumnConfig && savedColumnConfig.length > 0 ? savedColumnConfig : defaultColumnConfig
     const reconciled = base.filter((c) => availableKeys.includes(c.key))
     const missingKeys = availableKeys.filter((k) => !reconciled.some((c) => c.key === k))
-    setColumnConfig([...reconciled, ...missingKeys.map((k) => ({ key: k, visible: true }))])
+    const visibleByDefault = new Map(defaultColumnConfig.map((c) => [c.key, c.visible]))
+    setColumnConfig([...reconciled, ...missingKeys.map((k) => ({ key: k, visible: visibleByDefault.get(k) ?? true }))])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedColumnConfig, availableColumns])
+  }, [savedColumnConfig, availableColumns, defaultColumnConfig])
 
   const visibleColumns = useMemo(
     () =>
@@ -267,6 +332,11 @@ export default function LeadsPage() {
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
       if (originFilter === 'kommo' && lead.external_source !== 'kommo') return false
       if (originFilter === 'form' && lead.external_source) return false
+      if (validityFilter !== 'all') {
+        const counts = leadCountsForMetrics(lead, validTags)
+        if (validityFilter === 'counts' && !counts) return false
+        if (validityFilter === 'excluded' && counts) return false
+      }
       if (hideDuplicates && duplicateIds.has(lead.id)) return false
       if (search) {
         const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
@@ -283,13 +353,13 @@ export default function LeadsPage() {
       if (av > bv) return 1 * dir
       return 0
     })
-  }, [leads, statusFilter, ratingFilter, originFilter, search, showSpam, hideDuplicates, duplicateIds, sort])
+  }, [leads, statusFilter, ratingFilter, originFilter, validityFilter, validTags, search, showSpam, hideDuplicates, duplicateIds, sort])
 
   // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
   // para no quedar mostrando una página vacía por accidente.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, ratingFilter, originFilter, search, showSpam, hideDuplicates, sort, pageSize])
+  }, [statusFilter, ratingFilter, originFilter, validityFilter, search, showSpam, hideDuplicates, sort, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -437,6 +507,17 @@ export default function LeadsPage() {
           <option value="form">Formulario web</option>
           <option value="kommo">Kommo (WhatsApp)</option>
         </select>
+        {kommoState && (
+          <select
+            value={validityFilter}
+            onChange={(e) => setValidityFilter(e.target.value as 'all' | 'counts' | 'excluded')}
+            className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
+          >
+            <option value="all">Todos (métricas)</option>
+            <option value="counts">Cuentan en métricas</option>
+            <option value="excluded">No cuentan en métricas</option>
+          </select>
+        )}
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={showSpam} onChange={(e) => setShowSpam(e.target.checked)} />
           Mostrar spam
@@ -490,6 +571,13 @@ export default function LeadsPage() {
                   )
                 })}
               </div>
+              <button
+                type="button"
+                onClick={() => persistColumnConfig(defaultColumnConfig)}
+                className="mt-2 w-full rounded-md border border-brand-line px-3 py-1 text-sm text-brand-gray hover:bg-brand-cream"
+              >
+                Restaurar columnas por defecto
+              </button>
               <button
                 type="button"
                 onClick={() => setShowColumnsMenu(false)}

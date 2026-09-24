@@ -6,6 +6,8 @@ import type { Lead } from '../types/database'
 import { leadQualityScore } from '../lib/leadQuality'
 import { monthKey } from '../lib/metrics'
 import { dedupeLeads } from '../lib/duplicates'
+import { leadCountsForMetrics } from '../lib/leadValidity'
+import { useKommoSyncState } from '../hooks/useKommoSync'
 import MonthlyTrend from '../components/metrics/MonthlyTrend'
 import CustomReport from '../components/metrics/CustomReport'
 
@@ -24,10 +26,20 @@ export default function MetricsPage() {
   const { workspaceId } = useParams()
   const { data: leads, isLoading, error } = useLeads(workspaceId)
   const { data: workspaceFields } = useWorkspaceFields(workspaceId)
+  const { data: kommoState } = useKommoSyncState(workspaceId)
+  const validTags = kommoState?.valid_tags
 
   // Los duplicados (mismo email en más de un lead) se excluyen de todas las
   // métricas, quedándonos con el registro más reciente de cada uno.
-  const dedupedLeads = useMemo(() => dedupeLeads((leads ?? []).filter((l) => !l.is_spam)), [leads])
+  // Los leads de Kommo sin ninguna etiqueta válida se importan pero no cuentan acá.
+  const dedupedLeads = useMemo(
+    () => dedupeLeads((leads ?? []).filter((l) => !l.is_spam && leadCountsForMetrics(l, validTags))),
+    [leads, validTags]
+  )
+  const uncountedCount = useMemo(
+    () => (leads ?? []).filter((l) => !l.is_spam && !leadCountsForMetrics(l, validTags)).length,
+    [leads, validTags]
+  )
 
   const metrics = useMemo(() => {
     const rows = dedupedLeads
@@ -96,6 +108,13 @@ export default function MetricsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <h1 className="text-lg font-semibold text-brand-carbon">Métricas</h1>
+
+      {uncountedCount > 0 && (
+        <p className="text-xs text-brand-gray bg-brand-cream border border-brand-line rounded-md px-3 py-2">
+          No se cuentan {uncountedCount} lead{uncountedCount === 1 ? '' : 's'} de Kommo sin etiqueta válida (
+          {(validTags ?? []).join(', ')}). Siguen en la tabla de leads, marcados.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Leads totales" value={metrics.total} />

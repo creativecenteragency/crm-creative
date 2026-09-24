@@ -9,6 +9,8 @@ import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import { useMyWorkspaceRole, useWorkspace } from '../hooks/useAdmin'
 import { ensureHtml, htmlToPlainText, renderTemplate, wrapBrandedEmail } from '../lib/emailTemplate'
 import { supabase } from '../lib/supabase'
+import { leadCountsForMetrics } from '../lib/leadValidity'
+import { useKommoSyncState } from '../hooks/useKommoSync'
 import WhatsAppButton from './WhatsAppButton'
 
 function addDays(n: number): string {
@@ -47,6 +49,8 @@ export default function LeadDrawer({
   const { data: templates } = useEmailTemplates(lead.workspace_id)
   const { data: branding } = useWorkspaceBranding(lead.workspace_id)
   const { data: workspace } = useWorkspace(lead.workspace_id)
+  const { data: kommoState } = useKommoSyncState(lead.workspace_id)
+  const countsForMetrics = leadCountsForMetrics(lead, kommoState?.valid_tags)
   const { data: leadEmails, isLoading: emailsLoading } = useLeadEmails(lead.id)
   const [templateSlot, setTemplateSlot] = useState<number | null>(null)
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -157,6 +161,13 @@ export default function LeadDrawer({
             Cerrar ✕
           </button>
         </div>
+
+        {!countsForMetrics && (
+          <p className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+            Este lead no tiene ninguna etiqueta válida ({(kommoState?.valid_tags ?? []).join(', ')}), así que no cuenta
+            para las métricas. Si se le agrega una en Kommo, pasa a contar en la próxima sincronización.
+          </p>
+        )}
 
         <div className="space-y-2 text-sm">
           <Field label="Email" value={lead.email} />

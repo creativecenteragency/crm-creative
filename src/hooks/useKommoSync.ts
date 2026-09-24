@@ -42,3 +42,17 @@ export function useTriggerKommoSync(workspaceId: string) {
     },
   })
 }
+
+export function useUpdateKommoValidTags(workspaceId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (validTags: string[]) => {
+      const { error } = await supabase
+        .from('kommo_sync_state')
+        .update({ valid_tags: validTags })
+        .eq('workspace_id', workspaceId)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kommo-sync-state', workspaceId] }),
+  })
+}

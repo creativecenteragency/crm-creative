@@ -12,6 +12,9 @@ export type Workspace = {
   slug: string
   logo_url: string | null
   webhook_token: string
+  // Fuente ACTIVA de leads de este cliente. Los históricos de la otra fuente
+  // siguen en la misma tabla.
+  lead_source: 'forminator' | 'kommo'
   field_mapping: Record<string, string>
   created_at: string
 }
@@ -120,11 +123,15 @@ export type Lead = {
   // solo Mercator). null en cualquier lead que entró por el webhook normal.
   external_source: string | null
   external_id: string | null
+  // Etiquetas del CRM externo (Kommo). [] en leads que entraron por formulario.
+  tags: string[]
 }
 
 export type KommoSyncState = {
   workspace_id: string
   last_updated_ts: number
+  // Un lead de Kommo cuenta para métricas solo si tiene alguna de estas etiquetas.
+  valid_tags: string[]
   last_synced_at: string | null
   last_result: { revisados: number; upserted: number; errors: string[]; tope_alcanzado: boolean } | null
 }

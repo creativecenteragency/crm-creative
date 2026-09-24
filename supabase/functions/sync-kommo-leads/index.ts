@@ -137,13 +137,16 @@ async function construirRegistro(lead: any, mapas: { pipes: Record<number, strin
     workspace_id: KOMMO_WORKSPACE_ID,
     external_source: 'kommo',
     external_id: String(lead.id),
-    first_name: lead.name || null,
+    // Kommo nombra por defecto 'Lead #<id>' a los leads que entran sin nombre (ej. por
+    // WhatsApp); en ese caso el nombre real es el del contacto.
+    first_name: (/^Lead #\d+$/.test(lead.name ?? '') && contactName ? contactName : lead.name) || null,
     last_name: null,
     email,
     phone,
     message: null,
     inquiry_type: null,
     extra,
+    tags,
     source_url: null,
     source_channel,
     source_campaign_id: null,
