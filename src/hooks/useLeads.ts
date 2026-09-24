@@ -7,13 +7,25 @@ export function useLeads(workspaceId: string | undefined) {
     queryKey: ['leads', workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('workspace_id', workspaceId!)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data as Lead[]
+      // PostgREST corta cada respuesta en 1000 filas sin avisar (max-rows). Un
+      // workspace que pasó de ese número (ej. Mercator con Kommo) perdía en
+      // silencio los leads más viejos, tanto en la tabla como en Métricas.
+      // Se pide en páginas hasta traer todo.
+      const PAGE = 1000
+      const all: Lead[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('workspace_id', workspaceId!)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        all.push(...(data as Lead[]))
+        if (!data || data.length < PAGE) break
+      }
+      return all
     },
   })
 }
