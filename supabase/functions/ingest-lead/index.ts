@@ -104,6 +104,18 @@ function cleanSlug(slug: string | undefined): string | undefined {
   return trimmed.replace(/^\{+/, '').replace(/\}+$/, '')
 }
 
+// Forminator nombra los campos con guion en los merge-tags de emails y notificaciones
+// ("email-1", "name-1") pero el webhook los manda con guion bajo ("email_1", "name_1").
+// Un mapeo cargado con la forma "equivocada" no encontraba nunca su campo y el lead
+// quedaba vacío (le pasó a Solari Sorlyl). Se busca la forma tal cual y, si no está,
+// con el guion cambiado.
+function lookupField(flat: Record<string, string>, slug: string | undefined): string | undefined {
+  if (!slug) return undefined
+  if (flat[slug] !== undefined) return flat[slug]
+  const swapped = slug.includes('-') ? slug.replace(/-/g, '_') : slug.replace(/_/g, '-')
+  return flat[swapped]
+}
+
 // Mismo criterio que src/lib/source.ts (classifySource) — Deno no puede importar
 // desde src/lib, así que esta lógica vive duplicada acá. Si se cambia una copia,
 // hay que cambiar la otra para que el webhook y las importaciones CSV no queden
@@ -188,8 +200,7 @@ Deno.serve(async (req) => {
 
   const core: Record<string, string | null> = {}
   for (const key of CORE_KEYS) {
-    const slug = cleanSlug(mapping[key])
-    core[key] = slug && flat[slug] !== undefined ? flat[slug] : null
+    core[key] = lookupField(flat, cleanSlug(mapping[key])) ?? null
   }
 
   // Cuando un cliente tiene un formulario de Forminator distinto por cada tipo de
@@ -204,19 +215,26 @@ Deno.serve(async (req) => {
   const extra: Record<string, string> = {}
   for (const [internalKey, rawSlug] of Object.entries(mapping)) {
     if ((CORE_KEYS as readonly string[]).includes(internalKey) || internalKey === 'source_url') continue
-    const slug = cleanSlug(rawSlug)
-    if (slug && flat[slug] !== undefined) extra[internalKey] = flat[slug]
+    const value = lookupField(flat, cleanSlug(rawSlug))
+    if (value !== undefined) extra[internalKey] = value
   }
 
   const sourceSlug = cleanSlug(mapping['source_url'])
   const sourceUrl =
-    (sourceSlug && flat[sourceSlug]) ||
+    lookupField(flat, sourceSlug) ||
     flat['url-referencia'] ||
     flat['url_referencia'] ||
     flat['source_url'] ||
     flat['page_url'] ||
     null
   const source = parseSource(sourceUrl ?? undefined)
+
+  // Si el mapeo no encontró ni un solo campo, lo más probable es que los nombres del
+  // formulario no coincidan con el mapeo: se deja en el log qué campos llegaron (solo
+  // los nombres, no los valores) para poder corregirlo.
+  if (Object.keys(core).every((k) => core[k] === null) && Object.keys(extra).length === 0) {
+    console.error('ingest_sin_mapeo', workspace.name, 'campos recibidos:', Object.keys(flat).join(', '))
+  }
 
   const { error: insertError } = await supabase.from('leads').insert({
     workspace_id: workspace.id,
