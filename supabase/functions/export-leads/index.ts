@@ -1,19 +1,28 @@
 // Edge Function: export-leads
 //
 // Endpoint de solo lectura para que un sistema externo (el sistema de gestión
-// interno de la agencia) sincronice leads como métrica de efectividad de
-// campañas. No usa sesión de usuario de Supabase — se autentica con una clave
+// interno de la agencia, Pangea One) sincronice leads como métrica de efectividad
+// de campañas. No usa sesión de usuario de Supabase — se autentica con una clave
 // compartida (header x-api-key) porque quien llama no es un usuario logueado
 // del CRM sino otro sistema.
 //
 // GET /export-leads
-// GET /export-leads?since=2026-08-01T00:00:00Z        (solo leads creados desde esa fecha)
-// GET /export-leads?workspace_id=<uuid>                (solo los leads de ese cliente)
+// GET /export-leads?since=2026-08-01T00:00:00Z         (solo leads CREADOS desde esa fecha)
+// GET /export-leads?updated_since=2026-08-01T00:00:00Z (leads creados O modificados desde esa fecha)
+// GET /export-leads?workspace_id=<uuid>                 (solo los leads de ese cliente)
+// GET /export-leads?only_valid=1                        (sin los que no cuentan para métricas)
 // Header requerido: x-api-key: <MANAGEMENT_API_KEY>
 //
 // Cada cuenta del sistema de gestión se conecta a UN cliente del CRM: usá
 // list-workspaces para obtener el listado de {id, name, slug} y elegir cuál
 // workspace_id corresponde a cada cuenta.
+//
+// Se devuelven TODOS los leads, cada uno con `counts_for_metrics`, `tags` y
+// `origin`, para que el sistema que consume decida qué contar. Así, si cambian
+// las etiquetas que se consideran válidas, no se pierde información por haber
+// filtrado antes de tiempo. `updated_since` sirve para el sync incremental:
+// `since` mira la fecha de creación, y un lead de Kommo puede llegar tarde al
+// CRM con una fecha de creación vieja (queda afuera de `since`, no de `updated_since`).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -27,8 +36,21 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
+// PostgREST corta cada respuesta en 1000 filas sin avisar; se pide por páginas.
+const PAGE = 1000
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS_HEADERS } })
+}
+
+// Mismo criterio que src/lib/leadValidity.ts (Deno no puede importar de src/lib):
+// un lead de Kommo cuenta para métricas solo si tiene alguna de las etiquetas
+// válidas de su workspace. Los que entraron por formulario siempre cuentan.
+function countsForMetrics(row: any, validTags: string[] | undefined): boolean {
+  if (row.external_source !== 'kommo') return true
+  if (!validTags || validTags.length === 0) return true
+  const valid = new Set(validTags.map((t) => t.trim().toLowerCase()))
+  return (row.tags ?? []).some((t: string) => valid.has(t.trim().toLowerCase()))
 }
 
 Deno.serve(async (req) => {
@@ -38,41 +60,63 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url)
   const since = url.searchParams.get('since')
+  const updatedSince = url.searchParams.get('updated_since')
   const workspaceId = url.searchParams.get('workspace_id')
+  const onlyValid = url.searchParams.get('only_valid') === '1'
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
-  let query = admin
-    .from('leads')
-    .select(
-      'id, workspace_id, created_at, updated_at, first_name, last_name, email, phone, inquiry_type, source_channel, source_campaign_id, landing_page, status, rating, is_spam, workspaces(name)'
-    )
-    .order('created_at', { ascending: true })
+  const { data: states, error: statesError } = await admin.from('kommo_sync_state').select('workspace_id, valid_tags')
+  if (statesError) return json({ error: statesError.message }, 500)
+  const validTagsByWorkspace = new Map<string, string[]>((states ?? []).map((s: any) => [s.workspace_id, s.valid_tags]))
 
-  if (since) query = query.gte('created_at', since)
-  if (workspaceId) query = query.eq('workspace_id', workspaceId)
+  const rows: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    let query = admin
+      .from('leads')
+      .select(
+        'id, workspace_id, created_at, updated_at, first_name, last_name, email, phone, inquiry_type, source_channel, source_campaign_id, landing_page, status, rating, is_spam, external_source, tags, extra, workspaces(name)'
+      )
+      .order('created_at', { ascending: true })
+      .order('id')
+      .range(from, from + PAGE - 1)
 
-  const { data, error } = await query
-  if (error) return json({ error: error.message }, 500)
+    if (since) query = query.gte('created_at', since)
+    if (updatedSince) query = query.gte('updated_at', updatedSince)
+    if (workspaceId) query = query.eq('workspace_id', workspaceId)
 
-  const leads = (data ?? []).map((row: any) => ({
-    id: row.id,
-    workspace_id: row.workspace_id,
-    workspace_name: row.workspaces?.name ?? null,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    first_name: row.first_name,
-    last_name: row.last_name,
-    email: row.email,
-    phone: row.phone,
-    inquiry_type: row.inquiry_type,
-    source_channel: row.source_channel,
-    source_campaign_id: row.source_campaign_id,
-    landing_page: row.landing_page,
-    status: row.status,
-    rating: row.rating,
-    is_spam: row.is_spam,
-  }))
+    const { data, error } = await query
+    if (error) return json({ error: error.message }, 500)
+    rows.push(...(data ?? []))
+    if (!data || data.length < PAGE) break
+  }
+
+  const leads = rows
+    .map((row: any) => ({
+      id: row.id,
+      workspace_id: row.workspace_id,
+      workspace_name: row.workspaces?.name ?? null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      email: row.email,
+      phone: row.phone,
+      inquiry_type: row.inquiry_type,
+      source_channel: row.source_channel,
+      source_campaign_id: row.source_campaign_id,
+      landing_page: row.landing_page,
+      status: row.status,
+      rating: row.rating,
+      is_spam: row.is_spam,
+      // 'kommo' si se sincronizó desde Kommo; 'form' si entró por formulario/CSV.
+      origin: row.external_source ?? 'form',
+      tags: row.tags ?? [],
+      embudo: row.extra?.Embudo ?? null,
+      etapa: row.extra?.Etapa ?? null,
+      counts_for_metrics: countsForMetrics(row, validTagsByWorkspace.get(row.workspace_id)),
+    }))
+    .filter((l) => !onlyValid || l.counts_for_metrics)
 
   return json({ ok: true, count: leads.length, leads })
 })
