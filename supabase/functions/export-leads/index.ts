@@ -10,17 +10,18 @@
 // GET /export-leads?since=2026-08-01T00:00:00Z         (solo leads CREADOS desde esa fecha)
 // GET /export-leads?updated_since=2026-08-01T00:00:00Z (leads creados O modificados desde esa fecha)
 // GET /export-leads?workspace_id=<uuid>                 (solo los leads de ese cliente)
-// GET /export-leads?only_valid=1                        (sin los que no cuentan para métricas)
+// GET /export-leads?include_all=1                      (TAMBIÉN los que no cuentan para métricas)
 // Header requerido: x-api-key: <MANAGEMENT_API_KEY>
 //
 // Cada cuenta del sistema de gestión se conecta a UN cliente del CRM: usá
 // list-workspaces para obtener el listado de {id, name, slug} y elegir cuál
 // workspace_id corresponde a cada cuenta.
 //
-// Se devuelven TODOS los leads, cada uno con `counts_for_metrics`, `tags` y
-// `origin`, para que el sistema que consume decida qué contar. Así, si cambian
-// las etiquetas que se consideran válidas, no se pierde información por haber
-// filtrado antes de tiempo. `updated_since` sirve para el sync incremental:
+// Por defecto se devuelven SOLO los leads que cuentan para métricas (los de
+// Kommo sin ninguna etiqueta válida quedan afuera): el sistema de gestión los usa
+// para medir efectividad de campañas y no debe contarlos. Con include_all=1 vienen
+// todos. Cada lead trae `counts_for_metrics`, `tags` y `origin`. `updated_since`
+// sirve para el sync incremental:
 // `since` mira la fecha de creación, y un lead de Kommo puede llegar tarde al
 // CRM con una fecha de creación vieja (queda afuera de `since`, no de `updated_since`).
 
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
   const since = url.searchParams.get('since')
   const updatedSince = url.searchParams.get('updated_since')
   const workspaceId = url.searchParams.get('workspace_id')
-  const onlyValid = url.searchParams.get('only_valid') === '1'
+  const includeAll = url.searchParams.get('include_all') === '1'
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
       etapa: row.extra?.Etapa ?? null,
       counts_for_metrics: countsForMetrics(row, validTagsByWorkspace.get(row.workspace_id)),
     }))
-    .filter((l) => !onlyValid || l.counts_for_metrics)
+    .filter((l) => includeAll || l.counts_for_metrics)
 
   return json({ ok: true, count: leads.length, leads })
 })
