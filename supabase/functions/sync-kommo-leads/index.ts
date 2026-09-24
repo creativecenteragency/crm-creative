@@ -30,7 +30,8 @@ const KOMMO_SUBDOMAIN = Deno.env.get('KOMMO_SUBDOMAIN')!
 const KOMMO_TOKEN = Deno.env.get('KOMMO_TOKEN')!
 const KOMMO_WORKSPACE_ID = Deno.env.get('KOMMO_WORKSPACE_ID')!
 
-const MAX_POR_EJECUCION = 200
+// Con ~160ms entre consultas, 100 leads (1-3 consultas c/u) tardan ~40-60s: lejos del tope de tiempo de la función.
+const MAX_POR_EJECUCION = 100
 const SOLAPAMIENTO_SEG = 900
 
 // CUIT del lead (custom field), igual que en el Apps Script original.
@@ -54,16 +55,37 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...CORS_HEADERS } })
 }
 
+// Kommo limita a ~7 consultas/segundo por cuenta. Cada lead necesita 1-2 consultas
+// extra (contacto, empresa), así que sin freno una corrida grande se pasa del
+// límite. Si Kommo responde 429/5xx, devolver null como con un 404 haría que el
+// lead se guardara SIN teléfono y pisara el que ya tenía — por eso acá se
+// reintenta con espera y, si sigue fallando, se corta la corrida entera (el
+// checkpoint no avanza y la próxima vuelve a intentarlo).
+let ultimaConsulta = 0
+const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 async function kommoGet(path: string): Promise<any> {
-  const res = await fetch(`https://${KOMMO_SUBDOMAIN}.kommo.com${path}`, {
-    headers: { Authorization: `Bearer ${KOMMO_TOKEN}` },
-  })
-  if (res.status === 204) return null
-  if (!res.ok) {
-    console.error('kommo_api_error', res.status, path, (await res.text()).slice(0, 300))
-    return null
+  for (let intento = 0; intento < 4; intento++) {
+    const espera = 160 - (Date.now() - ultimaConsulta)
+    if (espera > 0) await dormir(espera)
+    ultimaConsulta = Date.now()
+
+    const res = await fetch(`https://${KOMMO_SUBDOMAIN}.kommo.com${path}`, {
+      headers: { Authorization: `Bearer ${KOMMO_TOKEN}` },
+    })
+    if (res.status === 204) return null
+    if (res.status === 429 || res.status >= 500) {
+      await dormir(1000 * (intento + 1))
+      continue
+    }
+    if (!res.ok) {
+      // 4xx que no es de límite (ej. 404: contacto borrado) — es un dato que falta, no un error transitorio.
+      console.error('kommo_api_error', res.status, path, (await res.text()).slice(0, 300))
+      return null
+    }
+    return res.json()
   }
-  return res.json()
+  throw new Error('kommo_no_disponible ' + path)
 }
 
 function valorPorCodigo(campos: any[] | undefined, code: string): string | null {
