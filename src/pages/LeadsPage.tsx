@@ -12,8 +12,14 @@ import { useAuth } from '../context/AuthContext'
 import { useEmailTemplates } from '../hooks/useEmailTemplates'
 import { useWorkspaceBranding } from '../hooks/useWorkspaceBranding'
 import { useMyWorkspaceRole, useWorkspace, useWorkspaceFields } from '../hooks/useAdmin'
-import { useLeadsColumnPreferences, useUpdateLeadsColumnPreferences } from '../hooks/useLeadsColumnPreferences'
-import type { Lead, LeadColumnConfig, LeadRating, LeadStatus } from '../types/database'
+import {
+  useLeadsColumnPreferences,
+  useLeadsView,
+  useSaveLeadsView,
+  useUpdateLeadsColumnPreferences,
+} from '../hooks/useLeadsColumnPreferences'
+import type { Lead, LeadColumnConfig, LeadRating, LeadStatus, LeadsView } from '../types/database'
+import LeadFilterBar from '../components/LeadFilterBar'
 import { RatingBadge, StatusBadge } from '../components/LeadBadges'
 import LeadCard from '../components/LeadCard'
 import LeadDrawer from '../components/LeadDrawer'
@@ -33,7 +39,6 @@ function addDays(n: number): string {
 }
 
 type SortKey = 'created_at' | 'name' | 'contact' | 'inquiry_type' | 'source_channel' | 'quality' | 'status' | 'rating'
-type SortDirection = 'asc' | 'desc'
 
 const STATUS_RANK: Record<LeadStatus, number> = { nuevo: 0, contactado: 1, cotizado: 2, ganado: 3, perdido: 4 }
 const RATING_RANK: Record<LeadRating, number> = { malo: 0, regular: 1, bueno: 2 }
@@ -59,7 +64,25 @@ function sortValue(lead: Lead, key: SortKey): string | number {
   }
 }
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+const DEFAULT_VIEW: LeadsView = {
+  status: 'all',
+  rating: 'all',
+  origin: 'all',
+  validity: 'all',
+  showSpam: false,
+  hideDuplicates: true,
+  sortKey: 'created_at',
+  sortDirection: 'desc',
+  pageSize: 25,
+}
+
+const VIEW_KEYS = Object.keys(DEFAULT_VIEW) as (keyof LeadsView)[]
+
+// Una vista guardada puede venir incompleta o de una versión anterior: se
+// completa con los valores por defecto.
+function normalizeView(v: Partial<LeadsView> | null | undefined): LeadsView {
+  return { ...DEFAULT_VIEW, ...(v ?? {}) }
+}
 
 type ColumnDef = {
   key: string
@@ -169,18 +192,23 @@ export default function LeadsPage() {
   const isKommoWorkspace = workspace?.lead_source === 'kommo'
   const { data: savedColumnConfig } = useLeadsColumnPreferences(workspaceId)
   const updateColumnPrefs = useUpdateLeadsColumnPreferences(workspaceId)
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
-  const [ratingFilter, setRatingFilter] = useState<LeadRating | 'all'>('all')
-  const [originFilter, setOriginFilter] = useState<'all' | 'form' | 'kommo'>('all')
-  const [validityFilter, setValidityFilter] = useState<'all' | 'counts' | 'excluded'>('all')
+  const { data: savedView } = useLeadsView(workspaceId)
+  const saveView = useSaveLeadsView(workspaceId)
+  // Filtros, orden y tamaño de página viven juntos en `view` para poder guardarlos
+  // como la vista del usuario. La búsqueda de texto y la página actual no se guardan.
+  const [view, setView] = useState<LeadsView>(DEFAULT_VIEW)
+  const [useCustomPageSize, setUseCustomPageSize] = useState(false)
+  const { status: statusFilter, rating: ratingFilter, origin: originFilter, validity: validityFilter } = view
+  const { showSpam, hideDuplicates, pageSize } = view
+  const sort = useMemo(
+    () => ({ key: view.sortKey as SortKey, direction: view.sortDirection }),
+    [view.sortKey, view.sortDirection]
+  )
+  function patchView(patch: Partial<LeadsView>) {
+    setView((v) => ({ ...v, ...patch }))
+  }
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Lead | null>(null)
-  const [showSpam, setShowSpam] = useState(false)
-  const [hideDuplicates, setHideDuplicates] = useState(true)
-  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
-    key: 'created_at',
-    direction: 'desc',
-  })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<LeadStatus>('nuevo')
   const [bulkRating, setBulkRating] = useState<LeadRating>('bueno')
@@ -188,9 +216,6 @@ export default function LeadsPage() {
   const [bulkEmailState, setBulkEmailState] = useState<'idle' | 'sending'>('idle')
   const [bulkEmailResult, setBulkEmailResult] = useState<string | null>(null)
   const [bulkFollowUpTargets, setBulkFollowUpTargets] = useState<string[] | null>(null)
-  const [pageSize, setPageSize] = useState<number>(25)
-  const [useCustomPageSize, setUseCustomPageSize] = useState(false)
-  const [customPageSizeInput, setCustomPageSizeInput] = useState('')
   const [page, setPage] = useState(1)
   const [columnConfig, setColumnConfig] = useState<LeadColumnConfig[]>([])
   const [showColumnsMenu, setShowColumnsMenu] = useState(false)
@@ -312,12 +337,26 @@ export default function LeadsPage() {
   }
 
   function toggleSort(key: SortKey) {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
-        : { key, direction: 'asc' }
+    setView((v) =>
+      v.sortKey === key
+        ? { ...v, sortDirection: v.sortDirection === 'asc' ? 'desc' : 'asc' }
+        : { ...v, sortKey: key, sortDirection: 'asc' }
     )
   }
+
+  // Al abrir la lista se aplica la vista guardada del usuario (una sola vez por cliente).
+  const [appliedViewFor, setAppliedViewFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (savedView === undefined || appliedViewFor === workspaceId) return
+    const next = normalizeView(savedView)
+    setView(next)
+    setUseCustomPageSize(![10, 25, 50, 100].includes(next.pageSize))
+    setAppliedViewFor(workspaceId ?? null)
+  }, [savedView, appliedViewFor, workspaceId])
+
+  // Cambios respecto de lo guardado (o de los valores por defecto si no hay vista guardada).
+  const viewBaseline = normalizeView(savedView)
+  const viewDirty = VIEW_KEYS.some((k) => view[k] !== viewBaseline[k])
 
   const duplicateIds = useMemo(() => {
     // Mismo universo que Métricas: los que no cuentan para métricas no participan,
@@ -469,67 +508,13 @@ export default function LeadsPage() {
         <p className="text-sm text-brand-gray">{filtered.length} de {leads?.length ?? 0}</p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <input
           placeholder="Buscar por nombre, email, consulta, empresa…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-md border border-brand-line px-3 py-1.5 text-sm min-w-56 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+          className="rounded-md border border-brand-line px-3 py-1.5 text-sm min-w-56 flex-1 max-w-md focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as LeadStatus | 'all')}
-          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
-        >
-          <option value="all">Todos los estados</option>
-          {STATUS_ORDER.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={ratingFilter}
-          onChange={(e) => setRatingFilter(e.target.value as LeadRating | 'all')}
-          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
-        >
-          <option value="all">Todas las calificaciones</option>
-          {Object.entries(RATING_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={originFilter}
-          onChange={(e) => setOriginFilter(e.target.value as 'all' | 'form' | 'kommo')}
-          className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
-        >
-          <option value="all">Todos los orígenes</option>
-          <option value="form">Formulario web</option>
-          <option value="kommo">Kommo (WhatsApp)</option>
-        </select>
-        {kommoState && (
-          <select
-            value={validityFilter}
-            onChange={(e) => setValidityFilter(e.target.value as 'all' | 'counts' | 'excluded')}
-            className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
-          >
-            <option value="all">Todos (métricas)</option>
-            <option value="counts">Cuentan en métricas</option>
-            <option value="excluded">No cuentan en métricas</option>
-          </select>
-        )}
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={showSpam} onChange={(e) => setShowSpam(e.target.checked)} />
-          Mostrar spam
-        </label>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={hideDuplicates} onChange={(e) => setHideDuplicates(e.target.checked)} />
-          Ocultar duplicados
-          {duplicateIds.size > 0 && <span className="text-brand-orange">({duplicateIds.size})</span>}
-        </label>
-
         <div className="relative hidden md:block">
           <button
             type="button"
@@ -591,44 +576,25 @@ export default function LeadsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 ml-auto">
-          <select
-            value={useCustomPageSize ? 'custom' : String(pageSize)}
-            onChange={(e) => {
-              if (e.target.value === 'custom') {
-                setUseCustomPageSize(true)
-                const n = parseInt(customPageSizeInput, 10)
-                if (n > 0) setPageSize(n)
-              } else {
-                setUseCustomPageSize(false)
-                setPageSize(Number(e.target.value))
-              }
-            }}
-            className="rounded-md border border-brand-line px-3 py-1.5 text-sm"
-          >
-            {PAGE_SIZE_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n} por página
-              </option>
-            ))}
-            <option value="custom">Personalizado</option>
-          </select>
-          {useCustomPageSize && (
-            <input
-              type="number"
-              min={1}
-              value={customPageSizeInput}
-              onChange={(e) => {
-                setCustomPageSizeInput(e.target.value)
-                const n = parseInt(e.target.value, 10)
-                if (n > 0) setPageSize(n)
-              }}
-              placeholder="Cantidad"
-              className="w-24 rounded-md border border-brand-line px-2 py-1.5 text-sm"
-            />
-          )}
-        </div>
       </div>
+
+      <LeadFilterBar
+        view={view}
+        onChange={patchView}
+        showValidity={!!kommoState}
+        duplicateCount={duplicateIds.size}
+        customPageSize={useCustomPageSize}
+        onCustomPageSize={setUseCustomPageSize}
+        saved={!!savedView}
+        dirty={viewDirty}
+        saving={saveView.isPending}
+        onSave={() => saveView.mutate(view)}
+        onReset={() => {
+          setView(DEFAULT_VIEW)
+          setUseCustomPageSize(false)
+          if (savedView) saveView.mutate(null)
+        }}
+      />
 
       {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-orange bg-brand-cream px-4 py-2.5 text-sm">

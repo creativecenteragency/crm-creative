@@ -96,7 +96,21 @@ export type LeadsColumnPreferences = {
   user_id: string
   workspace_id: string
   columns: LeadColumnConfig[]
+  view: LeadsView | null
   updated_at: string
+}
+
+// Filtros y orden de la tabla de leads que el usuario puede guardar como su vista.
+export type LeadsView = {
+  status: LeadStatus | 'all'
+  rating: LeadRating | 'all'
+  origin: 'all' | 'form' | 'kommo'
+  validity: 'all' | 'counts' | 'excluded'
+  showSpam: boolean
+  hideDuplicates: boolean
+  sortKey: string
+  sortDirection: 'asc' | 'desc'
+  pageSize: number
 }
 
 export type Lead = {
