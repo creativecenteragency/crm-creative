@@ -320,9 +320,11 @@ export default function LeadsPage() {
   }
 
   const duplicateIds = useMemo(() => {
-    const nonSpam = (leads ?? []).filter((lead) => !lead.is_spam)
-    return duplicateLeadIds(nonSpam)
-  }, [leads])
+    // Mismo universo que Métricas: los que no cuentan para métricas no participan,
+    // así uno nuevo sin etiqueta válida no oculta a uno válido con el mismo contacto.
+    const counted = (leads ?? []).filter((lead) => !lead.is_spam && leadCountsForMetrics(lead, validTags))
+    return duplicateLeadIds(counted)
+  }, [leads, validTags])
 
   const filtered = useMemo(() => {
     if (!leads) return []
