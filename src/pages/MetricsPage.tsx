@@ -29,7 +29,7 @@ export default function MetricsPage() {
   const { data: kommoState } = useKommoSyncState(workspaceId)
   const validTags = kommoState?.valid_tags
 
-  // Los duplicados (mismo email en más de un lead) se excluyen de todas las
+  // Los duplicados (mismo email o teléfono en más de un lead) se excluyen de todas las
   // métricas, quedándonos con el registro más reciente de cada uno.
   // Los leads de Kommo sin ninguna etiqueta válida se importan pero no cuentan acá.
   const dedupedLeads = useMemo(
