@@ -70,9 +70,18 @@ async function kommoGet(path: string): Promise<any> {
     if (espera > 0) await dormir(espera)
     ultimaConsulta = Date.now()
 
-    const res = await fetch(`https://${KOMMO_SUBDOMAIN}.kommo.com${path}`, {
-      headers: { Authorization: `Bearer ${KOMMO_TOKEN}` },
-    })
+    // Kommo también corta la conexión (sin devolver ningún código HTTP) cuando se
+    // le pide demasiado seguido: fetch tira TypeError en vez de un 429.
+    let res: Response
+    try {
+      res = await fetch(`https://${KOMMO_SUBDOMAIN}.kommo.com${path}`, {
+        headers: { Authorization: `Bearer ${KOMMO_TOKEN}` },
+      })
+    } catch (err) {
+      console.error('kommo_network_error', path, String(err).slice(0, 200))
+      await dormir(1500 * (intento + 1))
+      continue
+    }
     if (res.status === 204) return null
     if (res.status === 429 || res.status >= 500) {
       await dormir(1000 * (intento + 1))
