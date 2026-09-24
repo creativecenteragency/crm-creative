@@ -94,6 +94,7 @@ export default function LeadFilterBar({
   view,
   onChange,
   showValidity,
+  availableTags,
   duplicateCount,
   customPageSize,
   onCustomPageSize,
@@ -106,6 +107,7 @@ export default function LeadFilterBar({
   view: LeadsView
   onChange: (patch: Partial<LeadsView>) => void
   showValidity: boolean
+  availableTags: { name: string; count: number }[]
   duplicateCount: number
   customPageSize: boolean
   onCustomPageSize: (on: boolean) => void
@@ -116,6 +118,20 @@ export default function LeadFilterBar({
   onReset: () => void
 }) {
   const [open, setOpen] = useState(readOpen)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const selectedTags = view.tags ?? []
+  function toggleTag(name: string) {
+    onChange({ tags: selectedTags.includes(name) ? selectedTags.filter((t) => t !== name) : [...selectedTags, name] })
+  }
+  // Las etiquetas elegidas siempre se ven, aunque queden fuera del recorte de "más usadas".
+  const TAG_LIMIT = 12
+  const visibleTags = showAllTags
+    ? availableTags
+    : availableTags.filter((t, i) => i < TAG_LIMIT || selectedTags.includes(t.name))
+  const tagList = [
+    ...visibleTags,
+    ...selectedTags.filter((n) => !availableTags.some((t) => t.name === n)).map((name) => ({ name, count: 0 })),
+  ]
   function toggleOpen() {
     setOpen((o) => {
       try {
@@ -133,6 +149,7 @@ export default function LeadFilterBar({
   if (view.rating !== 'all') active.push(RATING_LABELS[view.rating])
   if (view.origin !== 'all') active.push(ORIGIN_LABELS[view.origin])
   if (showValidity && view.validity !== 'all') active.push(VALIDITY_LABELS[view.validity])
+  for (const t of selectedTags) active.push('Etiqueta: ' + t)
   if (view.showSpam) active.push('Con spam')
   if (!view.hideDuplicates) active.push('Con duplicados')
 
@@ -249,6 +266,38 @@ export default function LeadFilterBar({
               <Chip active={view.validity === 'excluded'} dot="bg-amber-500" onClick={() => onChange({ validity: 'excluded' })}>
                 No cuentan
               </Chip>
+            </Group>
+          )}
+
+          {tagList.length > 0 && (
+            <Group label="Etiquetas">
+              {tagList.map((t) => (
+                <Chip key={t.name} active={selectedTags.includes(t.name)} onClick={() => toggleTag(t.name)}>
+                  {t.name}
+                  {t.count > 0 && <span className="text-[10px] text-brand-gray">{t.count}</span>}
+                </Chip>
+              ))}
+              {availableTags.length > TAG_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllTags((v) => !v)}
+                  className="px-2 text-xs font-medium text-brand-orange hover:underline"
+                >
+                  {showAllTags ? 'Ver menos' : `Ver todas (${availableTags.length})`}
+                </button>
+              )}
+              {selectedTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChange({ tags: [] })}
+                  className="px-2 text-xs font-medium text-brand-gray hover:underline"
+                >
+                  Limpiar
+                </button>
+              )}
+              <span className="basis-full pl-[6.5rem] text-[11px] text-brand-gray">
+                Podés elegir varias: se muestran los leads que tengan al menos una.
+              </span>
             </Group>
           )}
 

@@ -106,6 +106,8 @@ export type LeadsView = {
   rating: LeadRating | 'all'
   origin: 'all' | 'form' | 'kommo'
   validity: 'all' | 'counts' | 'excluded'
+  // Etiquetas de Kommo elegidas (selección múltiple; el lead entra si tiene alguna).
+  tags?: string[]
   showSpam: boolean
   hideDuplicates: boolean
   sortKey: string

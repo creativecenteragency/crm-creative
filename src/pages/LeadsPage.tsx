@@ -69,6 +69,7 @@ const DEFAULT_VIEW: LeadsView = {
   rating: 'all',
   origin: 'all',
   validity: 'all',
+  tags: [],
   showSpam: false,
   hideDuplicates: true,
   sortKey: 'created_at',
@@ -356,7 +357,19 @@ export default function LeadsPage() {
 
   // Cambios respecto de lo guardado (o de los valores por defecto si no hay vista guardada).
   const viewBaseline = normalizeView(savedView)
-  const viewDirty = VIEW_KEYS.some((k) => view[k] !== viewBaseline[k])
+  const viewDirty = VIEW_KEYS.some((k) =>
+    k === 'tags'
+      ? [...(view.tags ?? [])].sort().join('\u0000') !== [...(viewBaseline.tags ?? [])].sort().join('\u0000')
+      : view[k] !== viewBaseline[k]
+  )
+
+  // Etiquetas presentes en los leads (con cuántos las tienen), para el filtro múltiple.
+  const availableTags = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const lead of leads ?? []) for (const t of lead.tags ?? []) counts.set(t, (counts.get(t) ?? 0) + 1)
+    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [leads])
+  const tagFilter = useMemo(() => new Set((view.tags ?? []).map((t) => t.toLowerCase())), [view.tags])
 
   const duplicateIds = useMemo(() => {
     // Mismo universo que Métricas: los que no cuentan para métricas no participan,
@@ -373,6 +386,7 @@ export default function LeadsPage() {
       if (ratingFilter !== 'all' && lead.rating !== ratingFilter) return false
       if (originFilter === 'kommo' && lead.external_source !== 'kommo') return false
       if (originFilter === 'form' && lead.external_source) return false
+      if (tagFilter.size > 0 && !(lead.tags ?? []).some((t) => tagFilter.has(t.toLowerCase()))) return false
       if (validityFilter !== 'all') {
         const counts = leadCountsForMetrics(lead, validTags)
         if (validityFilter === 'counts' && !counts) return false
@@ -394,13 +408,13 @@ export default function LeadsPage() {
       if (av > bv) return 1 * dir
       return 0
     })
-  }, [leads, statusFilter, ratingFilter, originFilter, validityFilter, validTags, search, showSpam, hideDuplicates, duplicateIds, sort])
+  }, [leads, statusFilter, ratingFilter, originFilter, tagFilter, validityFilter, validTags, search, showSpam, hideDuplicates, duplicateIds, sort])
 
   // Si cambian los filtros, el orden o el tamaño de página, volvemos a la página 1
   // para no quedar mostrando una página vacía por accidente.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, ratingFilter, originFilter, validityFilter, search, showSpam, hideDuplicates, sort, pageSize])
+  }, [statusFilter, ratingFilter, originFilter, tagFilter, validityFilter, search, showSpam, hideDuplicates, sort, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -582,6 +596,7 @@ export default function LeadsPage() {
         view={view}
         onChange={patchView}
         showValidity={!!kommoState}
+        availableTags={availableTags}
         duplicateCount={duplicateIds.size}
         customPageSize={useCustomPageSize}
         onCustomPageSize={setUseCustomPageSize}
