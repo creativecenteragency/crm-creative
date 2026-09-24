@@ -45,6 +45,14 @@ const CANAL_POR_SOURCE_ID: Record<number, string> = {
   4110: 'WhatsApp Lite',
 }
 
+// Leads de un embudo entero que no son propios de Mercator: los aportó, de forma
+// solidaria, una empresa colega (embudo CrystalRock). Se importan igual, pero con
+// un canal propio para poder identificarlos y separarlos. Tiene prioridad sobre
+// el source_id porque el embudo dice mejor de dónde viene el lead que el canal.
+const CANAL_POR_PIPELINE_ID: Record<number, string> = {
+  14500704: 'Aporte colega (CrystalRock)',
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -160,9 +168,10 @@ async function construirRegistro(lead: any, mapas: { pipes: Record<number, strin
   if (cuit) extra['CUIT'] = cuit
   extra['Kommo Lead ID'] = String(lead.id)
 
-  const source_channel = lead.source_id
+  const source_channel = CANAL_POR_PIPELINE_ID[lead.pipeline_id]
+    ?? (lead.source_id
     ? CANAL_POR_SOURCE_ID[lead.source_id] ?? `Kommo (fuente ${lead.source_id})`
-    : 'Kommo'
+    : 'Kommo')
 
   return {
     workspace_id: KOMMO_WORKSPACE_ID,
