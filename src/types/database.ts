@@ -150,7 +150,13 @@ export type KommoSyncState = {
   valid_tags: string[]
   last_synced_at: string | null
   last_result: { revisados: number; upserted: number; errors: string[]; tope_alcanzado: boolean } | null
+  // Embudos y etapas de Kommo en su orden original (null hasta la primera sincronización nueva).
+  pipelines: KommoPipeline[] | null
 }
+
+// type: 0 etapa normal, 1 entrada, 142 ganado, 143 perdido.
+export type KommoStage = { id: number; name: string; sort: number; type: number }
+export type KommoPipeline = { id: number; name: string; sort: number; stages: KommoStage[] }
 
 // `Relationships: []` es una simplificación deliberada — no describimos las FKs al tipo,
 // así que los `select('tabla(*)')` embebidos devuelven `any` en vez de tipado estricto.

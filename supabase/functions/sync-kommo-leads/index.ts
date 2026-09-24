@@ -117,15 +117,31 @@ function valorPorFieldId(campos: any[] | undefined, fieldId: number): string | n
   return v ? String(v.value) : null
 }
 
-async function cargarMapasPipeline(): Promise<{ pipes: Record<number, string>; stages: Record<number, string> }> {
+type Estructura = { id: number; name: string; sort: number; stages: { id: number; name: string; sort: number; type: number }[] }[]
+
+// Además de los mapas id → nombre, devuelve la estructura completa de embudos y etapas
+// (con su orden en Kommo) para que el Kanban del CRM pueda dibujar las mismas columnas.
+async function cargarMapasPipeline(): Promise<{
+  pipes: Record<number, string>
+  stages: Record<number, string>
+  estructura: Estructura
+}> {
   const data = await kommoGet('/api/v4/leads/pipelines')
   const pipes: Record<number, string> = {}
   const stages: Record<number, string> = {}
+  const estructura: Estructura = []
   for (const pl of data?._embedded?.pipelines ?? []) {
     pipes[pl.id] = pl.name
-    for (const st of pl._embedded?.statuses ?? []) stages[st.id] = st.name
+    const etapas = []
+    for (const st of pl._embedded?.statuses ?? []) {
+      stages[st.id] = st.name
+      etapas.push({ id: st.id, name: st.name, sort: Number(st.sort) || 0, type: Number(st.type) || 0 })
+    }
+    etapas.sort((a, b) => a.sort - b.sort)
+    estructura.push({ id: pl.id, name: pl.name, sort: Number(pl.sort) || 0, stages: etapas })
   }
-  return { pipes, stages }
+  estructura.sort((a, b) => a.sort - b.sort)
+  return { pipes, stages, estructura }
 }
 
 async function construirRegistro(lead: any, mapas: { pipes: Record<number, string>; stages: Record<number, string> }) {
@@ -259,6 +275,7 @@ async function sync() {
   // (la próxima corrida ya no los volvería a pedir).
   const resultado = { revisados, upserted, errors, tope_alcanzado: topeAlcanzado }
   const patch: Record<string, unknown> = { last_synced_at: new Date().toISOString(), last_result: resultado }
+  if (mapas.estructura.length > 0) patch.pipelines = mapas.estructura
   if (errors.length === 0) patch.last_updated_ts = topeAlcanzado ? ultimoTs : inicioTs
 
   await admin.from('kommo_sync_state').update(patch).eq('workspace_id', KOMMO_WORKSPACE_ID)
