@@ -141,6 +141,13 @@ export type Lead = {
   external_id: string | null
   // Etiquetas del CRM externo (Kommo). [] en leads que entraron por formulario.
   tags: string[]
+  // Seguimiento de origen (Kommo): solo los leads que entraron desde la web lo traen.
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  utm_content: string | null
+  utm_term: string | null
+  referrer: string | null
 }
 
 export type KommoSyncState = {

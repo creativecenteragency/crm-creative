@@ -11,6 +11,12 @@
 // GET /export-leads?updated_since=2026-08-01T00:00:00Z (leads creados O modificados desde esa fecha)
 // GET /export-leads?workspace_id=<uuid>                 (solo los leads de ese cliente)
 // GET /export-leads?include_all=1                      (TAMBIÉN los que no cuentan para métricas)
+//
+// Campos de seguimiento por lead: utm_source, utm_medium, utm_campaign, utm_content,
+// utm_term y referrer. Son null cuando el lead no los trae: en Kommo solo los tienen
+// los que entraron desde la web (formulario/anuncio), no los de WhatsApp directo, y
+// los leads de formulario (origin "form") no los tienen. utm_campaign puede ser el
+// nombre de la campaña o el ID numérico de Meta.
 // Header requerido: x-api-key: <MANAGEMENT_API_KEY>
 //
 // Cada cuenta del sistema de gestión se conecta a UN cliente del CRM: usá
@@ -76,7 +82,7 @@ Deno.serve(async (req) => {
     let query = admin
       .from('leads')
       .select(
-        'id, workspace_id, created_at, updated_at, first_name, last_name, email, phone, inquiry_type, source_channel, source_campaign_id, landing_page, status, rating, is_spam, external_source, tags, extra, workspaces(name)'
+        'id, workspace_id, created_at, updated_at, first_name, last_name, email, phone, inquiry_type, source_channel, source_campaign_id, landing_page, status, rating, is_spam, external_source, tags, extra, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, workspaces(name)'
       )
       .order('created_at', { ascending: true })
       .order('id')
@@ -113,6 +119,12 @@ Deno.serve(async (req) => {
       // 'kommo' si se sincronizó desde Kommo; 'form' si entró por formulario/CSV.
       origin: row.external_source ?? 'form',
       tags: row.tags ?? [],
+      utm_source: row.utm_source ?? null,
+      utm_medium: row.utm_medium ?? null,
+      utm_campaign: row.utm_campaign ?? null,
+      utm_content: row.utm_content ?? null,
+      utm_term: row.utm_term ?? null,
+      referrer: row.referrer ?? null,
       embudo: row.extra?.Embudo ?? null,
       etapa: row.extra?.Etapa ?? null,
       counts_for_metrics: countsForMetrics(row, validTagsByWorkspace.get(row.workspace_id)),

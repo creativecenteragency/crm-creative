@@ -188,6 +188,18 @@ export default function LeadDrawer({
           ))}
         </div>
 
+        {(lead.utm_source || lead.utm_medium || lead.utm_campaign || lead.utm_content || lead.utm_term || lead.referrer) && (
+          <div className="space-y-2 rounded-md border border-brand-line bg-brand-cream/50 p-3 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-gray">Origen del lead (seguimiento)</p>
+            <Field label="Referrer" value={lead.referrer} />
+            <Field label="UTM fuente" value={lead.utm_source} />
+            <Field label="UTM medio" value={lead.utm_medium} />
+            <Field label="UTM campaña" value={lead.utm_campaign} />
+            <Field label="UTM contenido" value={lead.utm_content} />
+            <Field label="UTM término" value={lead.utm_term} />
+          </div>
+        )}
+
         <div className="space-y-1">
           <label className="block text-xs font-medium text-slate-500">Estado</label>
           <select

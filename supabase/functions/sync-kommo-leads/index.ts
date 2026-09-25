@@ -111,6 +111,16 @@ function valorPorCodigo(campos: any[] | undefined, code: string): string | null 
   return v ? String(v.value) : null
 }
 
+// Los datos de seguimiento (UTM, referrer) vienen como campos personalizados del lead
+// de tipo tracking_data, identificados por field_code. Solo están cuando el lead entró
+// desde la web; los que escriben directo por WhatsApp no los tienen.
+function valorSeguimiento(campos: any[] | undefined, code: string): string | null {
+  const c = (campos ?? []).find((x) => x.field_code === code)
+  const v = c?.values?.[0]?.value
+  const texto = v == null ? '' : String(v).trim()
+  return texto || null
+}
+
 function valorPorFieldId(campos: any[] | undefined, fieldId: number): string | null {
   const c = (campos ?? []).find((x) => x.field_id === fieldId)
   const v = c?.values?.[0]
@@ -207,6 +217,12 @@ async function construirRegistro(lead: any, mapas: { pipes: Record<number, strin
     source_channel,
     source_campaign_id: null,
     landing_page: null,
+    utm_source: valorSeguimiento(lead.custom_fields_values, 'UTM_SOURCE'),
+    utm_medium: valorSeguimiento(lead.custom_fields_values, 'UTM_MEDIUM'),
+    utm_campaign: valorSeguimiento(lead.custom_fields_values, 'UTM_CAMPAIGN'),
+    utm_content: valorSeguimiento(lead.custom_fields_values, 'UTM_CONTENT'),
+    utm_term: valorSeguimiento(lead.custom_fields_values, 'UTM_TERM'),
+    referrer: valorSeguimiento(lead.custom_fields_values, 'REFERRER'),
     created_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : undefined,
   }
 }

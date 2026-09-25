@@ -77,6 +77,17 @@ const DEFAULT_VIEW: LeadsView = {
   pageSize: 25,
 }
 
+// Datos de seguimiento de Kommo (solo los leads que entraron desde la web los traen).
+const TRACKING_COLUMNS = [
+  ['utm_source', 'UTM fuente'],
+  ['utm_medium', 'UTM medio'],
+  ['utm_campaign', 'UTM campaña'],
+  ['utm_content', 'UTM contenido'],
+  ['utm_term', 'UTM término'],
+  ['referrer', 'Referrer'],
+] as const
+const TRACKING_KEYS: string[] = TRACKING_COLUMNS.map(([field]) => field)
+
 const VIEW_KEYS = Object.keys(DEFAULT_VIEW) as (keyof LeadsView)[]
 
 // Una vista guardada puede venir incompleta o de una versión anterior: se
@@ -240,12 +251,27 @@ export default function LeadsPage() {
   const kommoColumns = useMemo<ColumnDef[]>(
     () =>
       isKommoWorkspace
-        ? ['Etiquetas', 'Embudo', 'Etapa', 'CUIT', 'Empresa'].map((k) => ({
-            key: 'extra:' + k,
-            label: k,
-            cellClassName: 'text-slate-600',
-            render: (lead: Lead) => lead.extra?.[k] ?? '',
-          }))
+        ? [
+            ...['Etiquetas', 'Embudo', 'Etapa', 'CUIT', 'Empresa'].map((k) => ({
+              key: 'extra:' + k,
+              label: k,
+              cellClassName: 'text-slate-600',
+              render: (lead: Lead) => lead.extra?.[k] ?? '',
+            })),
+            ...TRACKING_COLUMNS.map(([field, label]) => ({
+              key: field,
+              label,
+              cellClassName: 'text-slate-600',
+              render: (lead: Lead) =>
+                lead[field] ? (
+                  <span className="block max-w-[200px] truncate" title={lead[field] ?? ''}>
+                    {lead[field]}
+                  </span>
+                ) : (
+                  '—'
+                ),
+            })),
+          ]
         : [],
     [isKommoWorkspace]
   )
@@ -289,7 +315,10 @@ export default function LeadsPage() {
     () =>
       availableColumns.map((c) => ({
         key: c.key,
-        visible: !isKommoWorkspace || (c.key !== 'inquiry_type' && !customColumns.some((cc) => cc.key === c.key)),
+        // Las de seguimiento arrancan ocultas: solo el ~15% de los leads las trae.
+        visible:
+          !isKommoWorkspace ||
+          (c.key !== 'inquiry_type' && !TRACKING_KEYS.includes(c.key) && !customColumns.some((cc) => cc.key === c.key)),
       })),
     [availableColumns, isKommoWorkspace, customColumns]
   )
@@ -394,7 +423,7 @@ export default function LeadsPage() {
       }
       if (hideDuplicates && duplicateIds.has(lead.id)) return false
       if (search) {
-        const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''}`.toLowerCase()
+        const haystack = `${lead.first_name ?? ''} ${lead.last_name ?? ''} ${lead.email ?? ''} ${lead.phone ?? ''} ${lead.inquiry_type ?? ''} ${lead.extra?.company ?? ''} ${lead.source_channel ?? ''} ${lead.utm_campaign ?? ''} ${lead.utm_source ?? ''} ${lead.referrer ?? ''}`.toLowerCase()
         if (!haystack.includes(search.toLowerCase())) return false
       }
       return true
