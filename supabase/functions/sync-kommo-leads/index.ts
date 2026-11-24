@@ -95,6 +95,12 @@ async function kommoGet(path: string): Promise<any> {
       await dormir(1000 * (intento + 1))
       continue
     }
+    if (res.status === 401 || res.status === 403) {
+      // Token inválido/revocado o sin permisos: no es un dato que falta, es que la integración
+      // no funciona. Se corta la corrida con error (visible en "Última corrida") en vez de
+      // guardar 0 leads y avanzar el checkpoint como si todo estuviera bien.
+      throw new Error('kommo_auth ' + res.status + ' ' + path)
+    }
     if (!res.ok) {
       // 4xx que no es de límite (ej. 404: contacto borrado) — es un dato que falta, no un error transitorio.
       console.error('kommo_api_error', res.status, path, (await res.text()).slice(0, 300))
@@ -232,12 +238,18 @@ async function sync() {
 
   const { data: state } = await admin
     .from('kommo_sync_state')
-    .select('last_updated_ts')
+    .select('last_updated_ts, last_result')
     .eq('workspace_id', KOMMO_WORKSPACE_ID)
     .maybeSingle()
 
   const checkpoint = state?.last_updated_ts ?? 0
-  const desde = Math.max(0, checkpoint - SOLAPAMIENTO_SEG)
+  // El solapamiento hacia atrás cubre cambios que Kommo registra con demora. Pero si la corrida
+  // anterior cortó por el tope y dejó pendientes, estamos continuando un recorrido: retroceder
+  // 15 minutos ahí vuelve a pedir los mismos leads y, si hay más de MAX_POR_EJECUCION
+  // modificados en esa ventana (ej. una automatización que toca cientos de leads de golpe),
+  // el checkpoint nunca avanza (pasó el 21/10/2026: 168 leads en un minuto).
+  const continuando = (state?.last_result as any)?.tope_alcanzado === true
+  const desde = continuando ? checkpoint : Math.max(0, checkpoint - SOLAPAMIENTO_SEG)
   const inicioTs = Math.floor(Date.now() / 1000)
 
   const mapas = await cargarMapasPipeline()
@@ -289,7 +301,11 @@ async function sync() {
   // Si el upsert falló, no avanzamos el checkpoint — si no, los leads que
   // se revisaron pero no se llegaron a guardar quedan huérfanos para siempre
   // (la próxima corrida ya no los volvería a pedir).
-  const resultado = { revisados, upserted, errors, tope_alcanzado: topeAlcanzado }
+  // Si el tope se alcanzó sin avanzar (más de MAX_POR_EJECUCION leads con la MISMA hora de
+  // modificación), se pasa al segundo siguiente para no repetir la corrida para siempre.
+  const sinAvance = topeAlcanzado && ultimoTs <= desde
+  if (sinAvance) ultimoTs = desde + 1
+  const resultado = { revisados, upserted, errors, tope_alcanzado: topeAlcanzado, ...(sinAvance ? { saltado_por_empate: true } : {}) }
   const patch: Record<string, unknown> = { last_synced_at: new Date().toISOString(), last_result: resultado }
   if (mapas.estructura.length > 0) patch.pipelines = mapas.estructura
   if (errors.length === 0) patch.last_updated_ts = topeAlcanzado ? ultimoTs : inicioTs
